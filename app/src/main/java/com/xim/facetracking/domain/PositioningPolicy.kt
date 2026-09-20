@@ -43,7 +43,7 @@ data class PoseLimits(val yaw: Float, val pitch: Float, val roll: Float)
 
 /** Starting points, not measurements: tune poseEnter/poseExit from logged raw angles. */
 data class PositioningConfig(
-    val holdMs: Long = 2_000L,
+    val holdMs: Long = 1_000L,
     val maxGapMs: Long = 300L,
     val smoothingTauMs: Float = 150f,
     val centerTolerance: Float = 0.10f,
