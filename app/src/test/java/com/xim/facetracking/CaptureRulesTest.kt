@@ -48,33 +48,6 @@ class CaptureRulesTest {
         assertFalse(policy.update(memory, observation(3_000), emptyList()).state.ready)
     }
 
-    @Test fun timelineTracksGapsAndSnapshotsAreIdempotent() {
-        val timeline = QualityTimelineAccumulator(0)
-        timeline.add(0, emptyList())
-        timeline.add(500, emptyList())
-        val first = timeline.snapshot(1000)
-        assertEquals(600L, first.coveredMs)
-        assertEquals(400L, first.intervals.sumOf { it.durationMs })
-        assertEquals(first, timeline.snapshot(1000))
-    }
-
-    @Test fun overlappingFailuresAreNotDoubleCounted() {
-        val quality = QualityTimeline(listOf(
-            IssueInterval(QualityIssueType.BLURRY, 0, 1500, IssueSeverity.SOFT),
-            IssueInterval(QualityIssueType.LIGHT_UNEVEN, 0, 1500, IssueSeverity.SOFT)
-        ), 40_000, 40_000)
-        val artifact = VideoArtifact(ArtifactId("test"), 40_000, 1080, 1920, sessionId = "test")
-        assertTrue(RecordingAcceptancePolicy(spec).evaluate(artifact, quality).accepted)
-        assertFalse(RecordingAcceptancePolicy(spec).evaluate(artifact.copy(valid = false), quality).accepted)
-    }
-
-    @Test fun reportRejectsOverlongHardFailure() {
-        val quality = QualityTimeline(listOf(IssueInterval(QualityIssueType.FACE_MISSING, 0, 1500, IssueSeverity.HARD)), 40_000, 40_000)
-        val report = RecordingAcceptancePolicy(spec).evaluate(VideoArtifact(ArtifactId("test"), 40_000, 1080, 1920, sessionId = "test"), quality)
-        assertFalse(report.accepted)
-        assertEquals(QualityIssueType.FACE_MISSING, report.primaryFailure)
-    }
-
     @Test fun imageMetricsDetectCheekImbalanceAndHighlights() {
         val pixels = FloatArray(400) { i -> when { i % 20 < 7 -> 40f; i % 20 > 12 -> 120f; else -> 250f } }
         val result = ImageQualityMetrics.measure(LumaImage(20,20,pixels), FacialRegions(

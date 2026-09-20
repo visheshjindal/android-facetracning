@@ -3,7 +3,7 @@ package com.xim.facetracking.domain
 import kotlin.math.abs
 import kotlin.math.hypot
 
-/** History belongs to the caller's recording session; this evaluator has no hidden state. */
+/** History belongs to the caller's tracking session; this evaluator has no hidden state. */
 class MovementEvaluator(private val spec: CaptureSpec = CaptureSpec.DefaultV0_1) {
     fun evaluate(current: FrameObservation, history: List<FrameObservation>): QualityIssue? {
         val face = current.primaryFace ?: return null

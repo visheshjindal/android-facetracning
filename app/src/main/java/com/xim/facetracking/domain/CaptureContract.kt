@@ -24,7 +24,6 @@ interface FaceTrackingPort {
 
 interface CaptureClock {
     fun monotonicMs(): Long
-    fun wallTimeMs(): Long
 }
 
 data class CaptureState(
