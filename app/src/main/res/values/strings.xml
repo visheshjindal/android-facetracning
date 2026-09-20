@@ -9,7 +9,6 @@
     <string name="camera_unavailable">The front camera is unavailable. Please try again.</string>
     <string name="detector_unavailable">Face detection is unavailable. Please try again.</string>
     <string name="position_place">Place your face inside the oval</string>
-    <string name="position_one_person">Only one person should be in view</string>
     <string name="position_center">Center your face inside the oval</string>
     <string name="position_closer">Move a little closer</string>
     <string name="position_farther">Move a little farther away</string>

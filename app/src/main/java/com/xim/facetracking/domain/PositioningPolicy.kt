@@ -23,7 +23,7 @@ data class PositioningFace(
 data class PositioningTarget(val width: Float, val height: Float)
 
 enum class PositioningHint {
-    PLACE_FACE, ONE_PERSON, CENTER_FACE, CLOSER, FARTHER, LOOK_STRAIGHT, HOLD_STILL, FOLLOWING, TRACKING_LOST
+    PLACE_FACE, CENTER_FACE, CLOSER, FARTHER, LOOK_STRAIGHT, HOLD_STILL, FOLLOWING, TRACKING_LOST
 }
 
 data class PositioningState(
@@ -78,13 +78,12 @@ class PositioningPolicy(private val config: PositioningConfig = PositioningConfi
         state: PositioningState,
         now: Long,
         face: PositioningFace?,
-        count: Int,
         target: PositioningTarget
     ): PositioningState {
         val last = state.lastSample
         if (last != null && now <= last) return state
 
-        val usable = face?.takeIf { count > 0 && it.hasFiniteValues() }
+        val usable = face?.takeIf { it.hasFiniteValues() }
 
         if (state.following) {
             return state.copy(

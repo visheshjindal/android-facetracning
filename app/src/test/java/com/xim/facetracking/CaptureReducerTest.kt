@@ -29,7 +29,7 @@ class CaptureReducerTest {
         assertFalse(stopped.state.monitoring)
         val resumed = reducer.reduce(stopped.state, CaptureEvent.Resumed).state
         assertTrue(resumed.sessionId > initial.sessionId)
-        val old = CaptureEvent.Observation(TrackingObservation(initial.sessionId, 10, 1, PositioningFace(.5f,.5f,.5f,.5f,0f,0f,0f)))
+        val old = CaptureEvent.Observation(TrackingObservation(initial.sessionId, 10, PositioningFace(.5f,.5f,.5f,.5f,0f,0f,0f)))
         assertEquals(resumed, reducer.reduce(resumed, old).state)
         assertEquals(resumed, reducer.reduce(resumed, CaptureEvent.Failed(CameraProblem(initial.sessionId, CameraFailure.UNAVAILABLE))).state)
     }
@@ -44,16 +44,15 @@ class CaptureReducerTest {
         assertEquals(listOf(CaptureCommand.StartTracking(2)), retry.commands)
     }
 
-    @Test fun additionalFacesDoNotHidePrimaryFaceAndMissingDetectionClearsOverlay() {
+    @Test fun primaryFaceIsVisibleAndMissingDetectionClearsOverlay() {
         val initial = active()
         val face = PositioningFace(.5f, .5f, .3f, .3f, 0f, 0f, 0f)
         val visible = reducer.reduce(initial, CaptureEvent.Observation(
-            TrackingObservation(initial.sessionId, 100, 2, face)
+            TrackingObservation(initial.sessionId, 100, face)
         )).state
         assertEquals(face, visible.face)
-        assertNotEquals(PositioningHint.ONE_PERSON, visible.positioning.hint)
         val missing = reducer.reduce(visible, CaptureEvent.Observation(
-            TrackingObservation(initial.sessionId, 200, 1, null)
+            TrackingObservation(initial.sessionId, 200, null)
         )).state
         assertNull(missing.face)
         assertEquals(PositioningHint.PLACE_FACE, missing.positioning.hint)

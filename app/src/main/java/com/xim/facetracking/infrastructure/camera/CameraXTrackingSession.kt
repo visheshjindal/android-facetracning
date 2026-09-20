@@ -1,8 +1,6 @@
 package com.xim.facetracking.infrastructure.camera
 
 import android.content.Context
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
@@ -28,9 +26,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.concurrent.Executors
 import kotlin.time.Duration.Companion.milliseconds
-
-private const val TAG = "CameraXTrackingSession"
-private const val STALL_MS = 5_000L
 
 /** Main-thread camera ownership. The preview bridge attaches a view; the port controls monitoring. */
 class CameraXTrackingSession(context: Context, private val clock: CaptureClock) : FaceTrackingPort {

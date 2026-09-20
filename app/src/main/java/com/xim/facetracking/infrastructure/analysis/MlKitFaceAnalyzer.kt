@@ -51,7 +51,7 @@ class MlKitFaceAnalyzer(
                         it.headEulerAngleY, it.headEulerAngleX, it.headEulerAngleZ
                     )
                 }
-                onObservation(TrackingObservation(sessionId, sampleTimeMs, faces.size, face))
+                onObservation(TrackingObservation(sessionId, sampleTimeMs, face))
             }
         }
     }

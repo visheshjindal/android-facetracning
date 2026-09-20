@@ -6,7 +6,6 @@ import kotlinx.coroutines.flow.Flow
 data class TrackingObservation(
     val sessionId: Long,
     val timestampMs: Long,
-    val faceCount: Int,
     /** The primary detection for this frame; additional faces receive no overlay. */
     val face: PositioningFace?
 )
