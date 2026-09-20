@@ -44,7 +44,7 @@ class CaptureReducerTest {
         assertEquals(listOf(CaptureCommand.StartTracking(2)), retry.commands)
     }
 
-    @Test fun additionalFacesDoNotHideSelectedFaceAndCannotReplaceMissingTrack() {
+    @Test fun additionalFacesDoNotHidePrimaryFaceAndMissingDetectionClearsOverlay() {
         val initial = active()
         val face = PositioningFace(.5f, .5f, .3f, .3f, 0f, 0f, 0f)
         val visible = reducer.reduce(initial, CaptureEvent.Observation(

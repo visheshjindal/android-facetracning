@@ -7,7 +7,6 @@ import androidx.camera.core.ImageProxy
 import androidx.camera.mlkit.vision.MlKitAnalyzer
 import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetectorOptions
-import com.xim.facetracking.domain.FirstFaceLock
 import com.xim.facetracking.domain.CaptureClock
 import com.xim.facetracking.domain.PositioningFace
 import com.xim.facetracking.domain.TrackingObservation
@@ -18,8 +17,6 @@ import java.util.concurrent.ConcurrentHashMap
 class MlKitFaceAnalyzer(
     private val sessionId: Long,
     private val clock: CaptureClock,
-    private val faceLock: FirstFaceLock,
-    private val detectorGeneration: Long,
     callbackExecutor: Executor,
     private val viewport: () -> Pair<Int, Int>,
     onObservation: (TrackingObservation) -> Unit,
@@ -28,7 +25,6 @@ class MlKitFaceAnalyzer(
     private val detector = FaceDetection.getClient(FaceDetectorOptions.Builder()
         .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
         .setContourMode(FaceDetectorOptions.CONTOUR_MODE_NONE)
-        .enableTracking()
         .build())
     @Volatile private var closed = false
     private val frameTimes = ConcurrentHashMap<Long, Long>()
@@ -43,10 +39,8 @@ class MlKitFaceAnalyzer(
             } else {
                 val (width, height) = viewport()
                 val fresh = clock.monotonicMs() - sampleTimeMs <= 300L
-                val selected = if (fresh && width > 0 && height > 0) {
-                    faceLock.select(detectorGeneration, sampleTimeMs, faces.map { it.trackingId })
-                } else null
-                val face = selected?.let { faces[it] }?.let {
+                // Select one primary detection per frame; ID changes cannot block recovery.
+                val face = faces.firstOrNull()?.takeIf { fresh && width > 0 && height > 0 }?.let {
                     val box = it.boundingBox
                     PositioningFace(
                         box.exactCenterX() / width, box.exactCenterY() / height,

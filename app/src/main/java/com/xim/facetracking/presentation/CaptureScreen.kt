@@ -50,6 +50,11 @@ fun CaptureScreen(
                     Text(stringResource(state.failure?.messageResource() ?: state.hint.messageResource()),
                         color = if (state.showPositioningMask) Color.Black else Color.White,
                         style = MaterialTheme.typography.titleLarge)
+                    if (state.failure == null && state.hint == PositioningHint.TRACKING_LOST) {
+                        Button(onClick = { onAction(CaptureIntent.Retry) }) {
+                            Text(stringResource(R.string.restart_tracking))
+                        }
+                    }
                     if (state.failure != null) {
                         Button(onClick = { onAction(CaptureIntent.Retry) }) { Text(stringResource(R.string.retry_camera)) }
                         TextButton(onClick = exit) { Text(stringResource(R.string.exit_capture)) }
@@ -80,6 +85,7 @@ private fun PositioningHint.messageResource(): Int = when (this) {
     PositioningHint.LOOK_STRAIGHT -> R.string.position_straight
     PositioningHint.HOLD_STILL -> R.string.position_hold
     PositioningHint.FOLLOWING -> R.string.position_following
+    PositioningHint.TRACKING_LOST -> R.string.position_tracking_lost
 }
 
 private fun CameraFailure.messageResource(): Int = when (this) {

@@ -7,7 +7,7 @@ data class TrackingObservation(
     val sessionId: Long,
     val timestampMs: Long,
     val faceCount: Int,
-    /** Only the initially selected track; null when that track is absent. */
+    /** The primary detection for this frame; additional faces receive no overlay. */
     val face: PositioningFace?
 )
 

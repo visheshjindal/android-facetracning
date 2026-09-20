@@ -8,6 +8,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.xim.facetracking.domain.PositioningHint
+import com.xim.facetracking.presentation.CaptureIntent
 import com.xim.facetracking.presentation.CaptureScreen
 import com.xim.facetracking.presentation.CaptureUiState
 import org.junit.Assert.assertEquals
@@ -26,6 +27,19 @@ class CaptureScreenTest {
         }
         compose.onNodeWithText("Grant camera access").performClick()
         assertEquals(1, requests)
+    }
+
+    @Test fun trackingLossOffersRestartInsteadOfHiddenOvalGuidance() {
+        val actions = mutableListOf<CaptureIntent>()
+        compose.setContent {
+            MaterialTheme {
+                CaptureScreen(CaptureUiState(permissionGranted = true, showPositioningMask = false,
+                    hint = PositioningHint.TRACKING_LOST), actions::add, {}, {}, {}, { Box(it) })
+            }
+        }
+        compose.onNodeWithText("Tracking lost — look back at the camera, or restart tracking").assertIsDisplayed()
+        compose.onNodeWithText("Restart tracking").performClick()
+        assertEquals(listOf(CaptureIntent.Retry), actions.filterIsInstance<CaptureIntent.Retry>())
     }
 
     @Test fun rendersPositioningAndTrackingFromImmutableState() {

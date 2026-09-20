@@ -5,7 +5,7 @@ import kotlin.math.min
 
 data class PositioningFace(val x: Float, val y: Float, val width: Float, val height: Float, val yaw: Float, val pitch: Float, val roll: Float)
 data class PositioningTarget(val width: Float, val height: Float)
-enum class PositioningHint { PLACE_FACE, ONE_PERSON, CENTER_FACE, CLOSER, FARTHER, LOOK_STRAIGHT, HOLD_STILL, FOLLOWING }
+enum class PositioningHint { PLACE_FACE, ONE_PERSON, CENTER_FACE, CLOSER, FARTHER, LOOK_STRAIGHT, HOLD_STILL, FOLLOWING, TRACKING_LOST }
 data class PositioningState(
     val following: Boolean = false,
     val hint: PositioningHint = PositioningHint.PLACE_FACE,
@@ -26,12 +26,12 @@ class PositioningPolicy {
         if (state.lastSample != null && now <= state.lastSample) return state
         val visible = face != null && count > 0
         if (state.following) return state.copy(lastSample = now, hint = when {
-            !visible -> PositioningHint.PLACE_FACE
+            !visible -> PositioningHint.TRACKING_LOST
             else -> PositioningHint.FOLLOWING
         })
         val hint = when {
             !visible || target.width <= 0f -> PositioningHint.PLACE_FACE
-            abs(face!!.x - 0.5f) > target.width * 0.10f || abs(face.y - 0.5f) > target.height * 0.10f -> PositioningHint.CENTER_FACE
+            abs(face.x - 0.5f) > target.width * 0.10f || abs(face.y - 0.5f) > target.height * 0.10f -> PositioningHint.CENTER_FACE
             face.width > target.width * 0.95f || face.height > target.height * 0.95f -> PositioningHint.FARTHER
             face.width < target.width * 0.65f || face.height < target.height * 0.65f -> PositioningHint.CLOSER
             abs(face.yaw) > 10f || abs(face.pitch) > 10f || abs(face.roll) > 8f -> PositioningHint.LOOK_STRAIGHT

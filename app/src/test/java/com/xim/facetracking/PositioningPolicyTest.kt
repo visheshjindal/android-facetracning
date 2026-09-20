@@ -24,7 +24,7 @@ class PositioningPolicyTest {
         assertTrue(state.following)
         state = policy.update(state, 2100, null, 0, target)
         assertTrue(state.following)
-        assertEquals(PositioningHint.PLACE_FACE, state.hint)
+        assertEquals(PositioningHint.TRACKING_LOST, state.hint)
     }
 
     @Test fun detectionAloneDoesNotDismissMask() {
@@ -47,6 +47,6 @@ class PositioningPolicyTest {
         assertTrue(state.following)
         assertEquals(PositioningHint.FOLLOWING, state.hint)
         state = policy.update(state, 4200, null, 1, target)
-        assertEquals(PositioningHint.PLACE_FACE, state.hint)
+        assertEquals(PositioningHint.TRACKING_LOST, state.hint)
     }
 }

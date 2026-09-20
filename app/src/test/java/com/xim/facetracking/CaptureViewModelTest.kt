@@ -60,6 +60,47 @@ class CaptureViewModelTest {
         port.failures.close()
     }
 
+    @Test fun trackingLossOffersRecoveryWithoutOvalAndRestartRestoresAlignment() = runTest(dispatcher) {
+        val port = FakeTracking()
+        val vm = CaptureViewModel(port, CaptureReducer(PositioningPolicy()))
+        vm.onAction(CaptureIntent.PermissionResult(true))
+        vm.onAction(CaptureIntent.ViewportChanged(1080f, 2100f))
+        vm.onAction(CaptureIntent.Resumed)
+        runCurrent()
+        val target = positioningTarget(1080f, 2100f)
+        val face = PositioningFace(.5f, .5f, target.width * .8f, target.height * .8f, 0f, 0f, 0f)
+        for (time in 0L..2000L step 100) {
+            port.samples.send(TrackingObservation(1, time, 1, face))
+            runCurrent()
+        }
+        port.samples.send(TrackingObservation(1, 2100, 1, null))
+        runCurrent()
+        assertFalse(vm.state.value.showPositioningMask)
+        assertNull(vm.state.value.trackedFace)
+        assertEquals(PositioningHint.TRACKING_LOST, vm.state.value.hint)
+        val recoveredPrimary = face.copy(x = .55f)
+        port.samples.send(TrackingObservation(1, 2200, 2, recoveredPrimary))
+        runCurrent()
+        assertEquals(PositioningHint.FOLLOWING, vm.state.value.hint)
+        assertEquals(recoveredPrimary, vm.state.value.trackedFace)
+        assertFalse(vm.state.value.showPositioningMask)
+        port.samples.send(TrackingObservation(1, 2300, 0, null))
+        runCurrent()
+        vm.onAction(CaptureIntent.Retry)
+        runCurrent()
+        assertEquals(listOf(1L, 2L), port.sessions)
+        assertTrue(vm.state.value.showPositioningMask)
+        assertEquals(PositioningHint.PLACE_FACE, vm.state.value.hint)
+        assertNull(vm.state.value.trackedFace)
+        port.samples.send(TrackingObservation(1, 2400, 1, face))
+        runCurrent()
+        assertNull(vm.state.value.trackedFace)
+        vm.onAction(CaptureIntent.Stopped)
+        runCurrent()
+        port.samples.close()
+        port.failures.close()
+    }
+
     @Test fun errorsAreStateAndRetryStartsAnotherAttempt() = runTest(dispatcher) {
         val port = FakeTracking()
         val vm = CaptureViewModel(port, CaptureReducer(PositioningPolicy()))
