@@ -2,6 +2,7 @@ package com.xim.facetracking.infrastructure.camera
 
 import android.content.Context
 import android.util.Log
+import android.view.View
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.view.CameraController
@@ -37,6 +38,8 @@ class CameraXTrackingSession(
     override val observations = samples.receiveAsFlow()
     override val problems = failures.receiveAsFlow()
     private var preview: PreviewView? = null
+    private var previewLayoutListener: View.OnLayoutChangeListener? = null
+    @Volatile private var viewportSize = ViewportSize(0, 0)
     private var owner: LifecycleOwner? = null
     private var controller: LifecycleCameraController? = null
     private var analyzer: MlKitFaceAnalyzer? = null
@@ -47,17 +50,24 @@ class CameraXTrackingSession(
     private var watchdog: Job? = null
     fun attach(view: PreviewView, lifecycleOwner: LifecycleOwner) {
         if (preview === view) return
+        removePreviewLayoutListener()
         releaseCamera()
         preview = view
         owner = lifecycleOwner
+        viewportSize = ViewportSize(view.width, view.height)
+        previewLayoutListener = View.OnLayoutChangeListener { changed, _, _, _, _, _, _, _, _ ->
+            viewportSize = ViewportSize(changed.width, changed.height)
+        }.also(view::addOnLayoutChangeListener)
         bindIfPossible()
     }
 
     fun detach(view: PreviewView) {
         if (preview !== view) return
         releaseCamera()
+        removePreviewLayoutListener()
         preview = null
         owner = null
+        viewportSize = ViewportSize(0, 0)
     }
 
     override fun start(sessionId: Long) {
@@ -91,15 +101,20 @@ class CameraXTrackingSession(
             val detector = MlKitFaceAnalyzer(
                 id,
                 clock,
-                main,
-                { view.width to view.height },
+                worker,
+                {
+                    val size = viewportSize
+                    size.width to size.height
+                },
                 { observation ->
                     if (token == generation && requestedSession == id) {
                         lastArrivalMs = clock.monotonicMs()
                         samples.trySend(observation)
                     }
                 },
-                { fail(id, token, CameraFailure.DETECTOR_UNAVAILABLE) }
+                {
+                    main.execute { fail(id, token, CameraFailure.DETECTOR_UNAVAILABLE) }
+                }
             )
             analyzer = detector
             camera.setImageAnalysisAnalyzer(worker, detector)
@@ -159,6 +174,13 @@ class CameraXTrackingSession(
         executor?.shutdown()
         executor = null
     }
+
+    private fun removePreviewLayoutListener() {
+        previewLayoutListener?.let { listener -> preview?.removeOnLayoutChangeListener(listener) }
+        previewLayoutListener = null
+    }
+
+    private data class ViewportSize(val width: Int, val height: Int)
 
     private companion object {
         const val TAG = "CameraXTrackingSession"

@@ -19,9 +19,17 @@ data class CaptureUiState(
     val permissionGranted: Boolean = false,
     val showPositioningMask: Boolean = true,
     val showReturnGuide: Boolean = false,
-    val hint: PositioningHint = PositioningHint.PLACE_FACE,
+    val hint: CaptureGuidance = CaptureGuidance.PLACE_FACE,
+    val lightingIndicator: LightingIndicatorUiState = LightingIndicatorUiState(),
     val trackedFace: PositioningFace? = null,
     val failure: CameraFailure? = null
+)
+
+data class LightingIndicatorUiState(
+    val visible: Boolean = false,
+    val assessment: LightingAssessment = LightingAssessment.UNKNOWN,
+    val shadowSide: ShadowSide? = null,
+    val expanded: Boolean = false
 )
 
 class CaptureViewModel(
@@ -53,11 +61,22 @@ class CaptureViewModel(
     private fun handle(event: CaptureEvent) {
         val transition = reducer.reduce(domainState, event)
         domainState = transition.state
+        val positionReady = domainState.positioning.hint == PositioningHint.HOLD_STILL ||
+            domainState.positioning.hint == PositioningHint.FOLLOWING
+        val lighting = domainState.lighting
+        val compactGood = lighting.lastSampleMs?.let(lighting::isCompact) ?: false
         mutableState.value = CaptureUiState(
             permissionGranted = domainState.permissionGranted,
             showPositioningMask = !domainState.positioning.following,
             showReturnGuide = domainState.positioning.following,
-            hint = domainState.positioning.hint,
+            hint = domainState.guidance,
+            lightingIndicator = LightingIndicatorUiState(
+                visible = domainState.face != null,
+                assessment = lighting.assessment,
+                shadowSide = lighting.shadowSide,
+                expanded = positionReady && lighting.assessment != LightingAssessment.UNKNOWN &&
+                    (!compactGood || lighting.assessment != LightingAssessment.EVEN)
+            ),
             trackedFace = domainState.face.takeIf { domainState.positioning.following },
             failure = domainState.failure
         )

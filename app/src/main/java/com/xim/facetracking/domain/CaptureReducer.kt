@@ -1,14 +1,28 @@
 package com.xim.facetracking.domain
 
 /** Deterministic MVI transition. The caller executes commands and returns results as events. */
-class CaptureReducer(private val positioningPolicy: PositioningPolicy) {
+class CaptureReducer(
+    private val positioningPolicy: PositioningPolicy,
+    private val lightingPolicy: LightingPolicy = LightingPolicy(),
+    private val guidancePolicy: GuidancePolicy = GuidancePolicy()
+) {
     fun reduce(state: CaptureState, event: CaptureEvent): CaptureTransition {
         if (event is CaptureEvent.Observation) {
             val value = event.value
             if (!state.monitoring || value.sessionId != state.sessionId ||
                 (state.positioning.lastSample?.let { value.timestampMs <= it } == true)) return CaptureTransition(state)
+            val positioning = positioningPolicy.update(
+                state.positioning, value.timestampMs, value.face, state.target
+            )
+            val lighting = lightingPolicy.update(
+                state.lighting,
+                value.timestampMs,
+                value.lightingMetrics.takeIf { value.face != null && positioning.poseOk }
+            )
             return CaptureTransition(state.copy(
-                positioning = positioningPolicy.update(state.positioning, value.timestampMs, value.face, state.target),
+                positioning = positioning,
+                lighting = lighting,
+                guidance = guidancePolicy.resolve(positioning, lighting),
                 face = value.face
             ))
         }
@@ -28,10 +42,23 @@ class CaptureReducer(private val positioningPolicy: PositioningPolicy) {
         val restart = next.target != state.target || event == CaptureEvent.Retry
         if (state.monitoring && (!eligible || restart)) {
             commands += CaptureCommand.StopTracking
-            next = next.copy(monitoring = false, positioning = PositioningState(), face = null)
+            next = next.copy(
+                monitoring = false,
+                positioning = PositioningState(),
+                lighting = LightingState(),
+                guidance = CaptureGuidance.PLACE_FACE,
+                face = null
+            )
         }
         if (eligible && !next.monitoring) {
-            next = next.copy(sessionId = state.sessionId + 1, monitoring = true, positioning = PositioningState(), face = null)
+            next = next.copy(
+                sessionId = state.sessionId + 1,
+                monitoring = true,
+                positioning = PositioningState(),
+                lighting = LightingState(),
+                guidance = CaptureGuidance.PLACE_FACE,
+                face = null
+            )
             commands += CaptureCommand.StartTracking(next.sessionId)
         }
         return CaptureTransition(next, commands)

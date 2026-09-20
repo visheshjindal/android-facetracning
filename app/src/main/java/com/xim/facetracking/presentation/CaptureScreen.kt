@@ -3,6 +3,11 @@ package com.xim.facetracking.presentation
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -10,13 +15,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.xim.facetracking.R
 import com.xim.facetracking.domain.CameraFailure
-import com.xim.facetracking.domain.PositioningHint
+import com.xim.facetracking.domain.CaptureGuidance
+import com.xim.facetracking.domain.LightingAssessment
+import com.xim.facetracking.domain.ShadowSide
 
 @Composable
 fun CaptureScreen(
@@ -45,23 +56,117 @@ fun CaptureScreen(
                 FaceReturnGuide(state.showReturnGuide, Modifier.fillMaxSize())
                 TrackingOverlay(state, Modifier.fillMaxSize())
                 PositioningMask(state.showPositioningMask, Modifier.fillMaxSize())
-                Column(Modifier.align(Alignment.TopCenter).fillMaxWidth()
-                    .background(if (state.showPositioningMask) Color.White else Color.Black.copy(alpha = 0.7f))
-                    .padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(stringResource(state.failure?.messageResource() ?: state.hint.messageResource()),
-                        color = if (state.showPositioningMask) Color.Black else Color.White,
-                        style = MaterialTheme.typography.titleLarge)
-                    if (state.failure == null && state.hint == PositioningHint.TRACKING_LOST) {
-                        Button(onClick = { onAction(CaptureIntent.Retry) }) {
-                            Text(stringResource(R.string.restart_tracking))
+                Column(Modifier.align(Alignment.TopCenter).fillMaxWidth()) {
+                    Column(
+                        Modifier.fillMaxWidth()
+                            .background(if (state.showPositioningMask) Color.White else Color.Black.copy(alpha = 0.7f))
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(stringResource(state.failure?.messageResource() ?: state.hint.messageResource()),
+                            color = if (state.showPositioningMask) Color.Black else Color.White,
+                            style = MaterialTheme.typography.titleLarge)
+                        if (state.failure == null && state.hint == CaptureGuidance.TRACKING_LOST) {
+                            Button(onClick = { onAction(CaptureIntent.Retry) }) {
+                                Text(stringResource(R.string.restart_tracking))
+                            }
+                        }
+                        if (state.failure != null) {
+                            Button(onClick = { onAction(CaptureIntent.Retry) }) { Text(stringResource(R.string.retry_camera)) }
+                            TextButton(onClick = exit) { Text(stringResource(R.string.exit_capture)) }
                         }
                     }
-                    if (state.failure != null) {
-                        Button(onClick = { onAction(CaptureIntent.Retry) }) { Text(stringResource(R.string.retry_camera)) }
-                        TextButton(onClick = exit) { Text(stringResource(R.string.exit_capture)) }
+                    if (state.failure == null) {
+                        Box(Modifier.fillMaxWidth().padding(top = 8.dp, end = 16.dp)) {
+                            LightingIndicator(state.lightingIndicator, Modifier.align(Alignment.CenterEnd))
+                        }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun LightingIndicator(state: LightingIndicatorUiState, modifier: Modifier = Modifier) {
+    if (!state.visible) return
+    val label = stringResource(state.messageResource())
+    val containerColor = when (state.assessment) {
+        LightingAssessment.UNKNOWN -> Color.Black.copy(alpha = 0.68f)
+        LightingAssessment.EVEN -> Color(0xFF128A52)
+        LightingAssessment.UNEVEN,
+        LightingAssessment.TOO_DARK,
+        LightingAssessment.TOO_BRIGHT -> Color(0xFFFFB020)
+    }
+    val contentColor = if (state.assessment == LightingAssessment.UNKNOWN ||
+        state.assessment == LightingAssessment.EVEN) Color.White else Color.Black
+
+    Surface(
+        modifier = modifier.semantics(mergeDescendants = true) { contentDescription = label },
+        shape = MaterialTheme.shapes.extraLarge,
+        color = containerColor,
+        contentColor = contentColor,
+        shadowElevation = 2.dp
+    ) {
+        Row(
+            Modifier.heightIn(min = 40.dp).padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            LightingStatusIcon(state.assessment, 22.dp)
+            AnimatedVisibility(
+                visible = state.expanded,
+                enter = fadeIn() + expandHorizontally(expandFrom = Alignment.End),
+                exit = fadeOut() + shrinkHorizontally(shrinkTowards = Alignment.End)
+            ) {
+                Text(
+                    label,
+                    Modifier.padding(start = 8.dp),
+                    style = MaterialTheme.typography.labelLarge
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LightingStatusIcon(assessment: LightingAssessment, size: Dp) {
+    val color = LocalContentColor.current
+    Canvas(Modifier.size(size)) {
+        val center = this.center
+        val radius = this.size.minDimension * 0.22f
+        val stroke = this.size.minDimension * 0.09f
+        drawCircle(color, radius, center, style = Stroke(stroke))
+        repeat(8) { index ->
+            val angle = Math.toRadians(index * 45.0)
+            val inner = radius * 1.55f
+            val outer = radius * 2.05f
+            drawLine(
+                color,
+                Offset(center.x + kotlin.math.cos(angle).toFloat() * inner,
+                    center.y + kotlin.math.sin(angle).toFloat() * inner),
+                Offset(center.x + kotlin.math.cos(angle).toFloat() * outer,
+                    center.y + kotlin.math.sin(angle).toFloat() * outer),
+                strokeWidth = stroke,
+                cap = androidx.compose.ui.graphics.StrokeCap.Round
+            )
+        }
+        when (assessment) {
+            LightingAssessment.EVEN -> {
+                val check = Path().apply {
+                    moveTo(center.x - radius * .55f, center.y)
+                    lineTo(center.x - radius * .10f, center.y + radius * .42f)
+                    lineTo(center.x + radius * .65f, center.y - radius * .45f)
+                }
+                drawPath(check, color, style = Stroke(stroke * .8f))
+            }
+            LightingAssessment.UNEVEN,
+            LightingAssessment.TOO_DARK,
+            LightingAssessment.TOO_BRIGHT -> {
+                drawLine(color, Offset(center.x, center.y - radius * .5f),
+                    Offset(center.x, center.y + radius * .15f), strokeWidth = stroke * .75f)
+                drawCircle(color, stroke * .42f, Offset(center.x, center.y + radius * .55f))
+            }
+            LightingAssessment.UNKNOWN -> Unit
         }
     }
 }
@@ -77,19 +182,35 @@ private fun TrackingOverlay(state: CaptureUiState, modifier: Modifier) {
     }
 }
 
-private fun PositioningHint.messageResource(): Int = when (this) {
-    PositioningHint.PLACE_FACE -> R.string.position_place
-    PositioningHint.CENTER_FACE -> R.string.position_center
-    PositioningHint.MOVE_LEFT -> R.string.position_move_left
-    PositioningHint.MOVE_RIGHT -> R.string.position_move_right
-    PositioningHint.MOVE_UP -> R.string.position_move_up
-    PositioningHint.MOVE_DOWN -> R.string.position_move_down
-    PositioningHint.CLOSER -> R.string.position_closer
-    PositioningHint.FARTHER -> R.string.position_farther
-    PositioningHint.LOOK_STRAIGHT -> R.string.position_straight
-    PositioningHint.HOLD_STILL -> R.string.position_hold
-    PositioningHint.FOLLOWING -> R.string.position_following
-    PositioningHint.TRACKING_LOST -> R.string.position_tracking_lost
+private fun CaptureGuidance.messageResource(): Int = when (this) {
+    CaptureGuidance.PLACE_FACE -> R.string.position_place
+    CaptureGuidance.CENTER_FACE -> R.string.position_center
+    CaptureGuidance.MOVE_LEFT -> R.string.position_move_left
+    CaptureGuidance.MOVE_RIGHT -> R.string.position_move_right
+    CaptureGuidance.MOVE_UP -> R.string.position_move_up
+    CaptureGuidance.MOVE_DOWN -> R.string.position_move_down
+    CaptureGuidance.CLOSER -> R.string.position_closer
+    CaptureGuidance.FARTHER -> R.string.position_farther
+    CaptureGuidance.LOOK_STRAIGHT -> R.string.position_straight
+    CaptureGuidance.HOLD_STILL -> R.string.position_hold
+    CaptureGuidance.FOLLOWING -> R.string.position_following
+    CaptureGuidance.TRACKING_LOST -> R.string.position_tracking_lost
+    CaptureGuidance.LIGHT_USER_LEFT -> R.string.lighting_add_left
+    CaptureGuidance.LIGHT_USER_RIGHT -> R.string.lighting_add_right
+    CaptureGuidance.MORE_LIGHT -> R.string.lighting_more
+    CaptureGuidance.REDUCE_LIGHT -> R.string.lighting_reduce
+}
+
+private fun LightingIndicatorUiState.messageResource(): Int = when (assessment) {
+    LightingAssessment.UNKNOWN -> R.string.lighting_checking
+    LightingAssessment.EVEN -> R.string.lighting_even
+    LightingAssessment.UNEVEN -> if (shadowSide == ShadowSide.USER_LEFT) {
+        R.string.lighting_add_left
+    } else {
+        R.string.lighting_add_right
+    }
+    LightingAssessment.TOO_DARK -> R.string.lighting_more
+    LightingAssessment.TOO_BRIGHT -> R.string.lighting_reduce
 }
 
 private fun CameraFailure.messageResource(): Int = when (this) {

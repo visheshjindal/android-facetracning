@@ -7,7 +7,9 @@ data class TrackingObservation(
     val sessionId: Long,
     val timestampMs: Long,
     /** The primary detection for this frame; additional faces receive no overlay. */
-    val face: PositioningFace?
+    val face: PositioningFace?,
+    /** Null means the frame could not provide a trustworthy face-light measurement. */
+    val lightingMetrics: FaceLightingMetrics? = null
 )
 
 enum class CameraFailure { UNAVAILABLE, PERMISSION_DENIED, DETECTOR_UNAVAILABLE }
@@ -33,6 +35,8 @@ data class CaptureState(
     val sessionId: Long = 0,
     val monitoring: Boolean = false,
     val positioning: PositioningState = PositioningState(),
+    val lighting: LightingState = LightingState(),
+    val guidance: CaptureGuidance = CaptureGuidance.PLACE_FACE,
     val face: PositioningFace? = null,
     val failure: CameraFailure? = null
 )

@@ -20,6 +20,12 @@
     <string name="position_hold">Hold still for a moment</string>
     <string name="position_following">Face positioned — following your face</string>
     <string name="position_tracking_lost">Tracking lost — return your face to the outline</string>
+    <string name="lighting_checking">Checking lighting</string>
+    <string name="lighting_even">Lighting is even</string>
+    <string name="lighting_add_left">Add light to the left side of your face</string>
+    <string name="lighting_add_right">Add light to the right side of your face</string>
+    <string name="lighting_more">Face a light source</string>
+    <string name="lighting_reduce">Step away from direct light</string>
     <string name="face_return_guide_description">Face return guide</string>
     <string name="restart_tracking">Restart tracking</string>
 </resources>
