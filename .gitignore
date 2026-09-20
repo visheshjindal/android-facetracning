@@ -1,0 +1,70 @@
+# Built application files
+*.apk
+*.aar
+*.ap_
+*.aab
+
+# Files for the ART/Dalvik VM
+*.dex
+
+# Java and Kotlin class & log files
+*.class
+*.log
+
+# Generated build directories & caches
+build/
+bin/
+gen/
+out/
+captures/
+.gradle/
+.kotlin/
+
+# Android Studio & IntelliJ IDEA
+*.iml
+.idea/caches/
+.idea/libraries/
+.idea/modules.xml
+.idea/workspace.xml
+.idea/navEditor.xml
+.idea/assetWizardSettings.xml
+.idea/deploymentTargetSelector.xml
+.idea/deviceManager.xml
+.idea/shelf/
+.idea/tasks.xml
+.idea/usage.statistics.xml
+.idea/gradle.local.xml
+
+# CMake / C++ native build
+.externalNativeBuild/
+.cxx/
+
+# Local configuration & environment
+local.properties
+signing.properties
+secrets.properties
+
+# Keystores and signing certificates
+*.jks
+*.keystore
+*.key
+
+# Test reports & profiling
+lint/
+reports/
+test-results/
+*.hprof
+
+# OS-generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Editor & temporary files
+.vscode/
+*.swp
+*~

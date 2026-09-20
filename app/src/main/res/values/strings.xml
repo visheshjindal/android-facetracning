@@ -1,0 +1,19 @@
+<resources>
+    <string name="app_name">facetracking</string>
+    <string name="camera_permission_title">Camera access is required</string>
+    <string name="camera_permission_body">Allow camera access to position your face inside the guide.</string>
+    <string name="camera_permission_grant">Grant camera access</string>
+    <string name="camera_settings">Open app settings</string>
+    <string name="exit_capture">Exit</string>
+    <string name="retry_camera">Try again</string>
+    <string name="camera_unavailable">The front camera is unavailable. Please try again.</string>
+    <string name="detector_unavailable">Face detection is unavailable. Please try again.</string>
+    <string name="position_place">Place your face inside the oval</string>
+    <string name="position_one_person">Only one person should be in view</string>
+    <string name="position_center">Center your face inside the oval</string>
+    <string name="position_closer">Move a little closer</string>
+    <string name="position_farther">Move a little farther away</string>
+    <string name="position_straight">Look straight at the camera</string>
+    <string name="position_hold">Hold still for a moment</string>
+    <string name="position_following">Face positioned — following your face</string>
+</resources>
