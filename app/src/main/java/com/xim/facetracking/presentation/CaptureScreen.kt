@@ -1,6 +1,5 @@
 package com.xim.facetracking.presentation
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.animation.AnimatedVisibility
@@ -12,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -21,12 +21,14 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.xim.facetracking.R
 import com.xim.facetracking.domain.CameraFailure
 import com.xim.facetracking.domain.CaptureGuidance
 import com.xim.facetracking.domain.LightingAssessment
+import com.xim.facetracking.domain.PositioningFace
 import com.xim.facetracking.domain.ShadowSide
 
 @Composable
@@ -36,12 +38,19 @@ fun CaptureScreen(
     requestPermission: () -> Unit,
     openSettings: () -> Unit,
     exit: () -> Unit,
-    preview: @Composable (Modifier) -> Unit
+    preview: @Composable (Modifier) -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    Scaffold { padding ->
+    Scaffold(modifier = modifier) { padding ->
         if (!state.permissionGranted) {
-            Column(Modifier.fillMaxSize().padding(padding).padding(24.dp),
-                verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
                 Text(stringResource(R.string.camera_permission_title), style = MaterialTheme.typography.headlineSmall)
                 Text(stringResource(R.string.camera_permission_body))
                 Button(onClick = requestPermission) { Text(stringResource(R.string.camera_permission_grant)) }
@@ -54,7 +63,7 @@ fun CaptureScreen(
             }) {
                 preview(Modifier.fillMaxSize())
                 FaceReturnGuide(state.showReturnGuide, Modifier.fillMaxSize())
-                TrackingOverlay(state, Modifier.fillMaxSize())
+                TrackingOverlay(state.trackedFace, Modifier.fillMaxSize())
                 PositioningMask(state.showPositioningMask, Modifier.fillMaxSize())
                 Column(Modifier.align(Alignment.TopCenter).fillMaxWidth()) {
                     Column(
@@ -77,9 +86,12 @@ fun CaptureScreen(
                         }
                     }
                     if (state.failure == null) {
-                        Box(Modifier.fillMaxWidth().padding(top = 8.dp, end = 16.dp)) {
-                            LightingIndicator(state.lightingIndicator, Modifier.align(Alignment.CenterEnd))
-                        }
+                        LightingIndicator(
+                            state = state.lightingIndicator,
+                            modifier = Modifier
+                                .align(Alignment.End)
+                                .padding(top = 8.dp, end = 16.dp)
+                        )
                     }
                 }
             }
@@ -130,58 +142,96 @@ private fun LightingIndicator(state: LightingIndicatorUiState, modifier: Modifie
 }
 
 @Composable
-private fun LightingStatusIcon(assessment: LightingAssessment, size: Dp) {
+private fun LightingStatusIcon(
+    assessment: LightingAssessment,
+    iconSize: Dp,
+    modifier: Modifier = Modifier
+) {
     val color = LocalContentColor.current
-    Canvas(Modifier.size(size)) {
-        val center = this.center
-        val radius = this.size.minDimension * 0.22f
-        val stroke = this.size.minDimension * 0.09f
-        drawCircle(color, radius, center, style = Stroke(stroke))
-        repeat(8) { index ->
-            val angle = Math.toRadians(index * 45.0)
-            val inner = radius * 1.55f
-            val outer = radius * 2.05f
-            drawLine(
-                color,
-                Offset(center.x + kotlin.math.cos(angle).toFloat() * inner,
-                    center.y + kotlin.math.sin(angle).toFloat() * inner),
-                Offset(center.x + kotlin.math.cos(angle).toFloat() * outer,
-                    center.y + kotlin.math.sin(angle).toFloat() * outer),
-                strokeWidth = stroke,
-                cap = androidx.compose.ui.graphics.StrokeCap.Round
-            )
-        }
-        when (assessment) {
-            LightingAssessment.ACCEPTABLE -> {
-                val check = Path().apply {
-                    moveTo(center.x - radius * .55f, center.y)
-                    lineTo(center.x - radius * .10f, center.y + radius * .42f)
-                    lineTo(center.x + radius * .65f, center.y - radius * .45f)
+    Spacer(
+        modifier = modifier
+            .size(iconSize)
+            .drawWithCache {
+                val center = Offset(size.width / 2f, size.height / 2f)
+                val radius = size.minDimension * 0.22f
+                val strokeWidth = size.minDimension * 0.09f
+                val circleStroke = Stroke(strokeWidth)
+                val rayStroke = strokeWidth
+                val checkStroke = Stroke(strokeWidth * 0.8f)
+                val exclamStroke = strokeWidth * 0.75f
+                val dotRadius = strokeWidth * 0.42f
+
+                val rayOffsets = (0 until 8).map { index ->
+                    val angle = Math.toRadians(index * 45.0)
+                    val cosA = kotlin.math.cos(angle).toFloat()
+                    val sinA = kotlin.math.sin(angle).toFloat()
+                    val inner = radius * 1.55f
+                    val outer = radius * 2.05f
+                    Offset(center.x + cosA * inner, center.y + sinA * inner) to
+                        Offset(center.x + cosA * outer, center.y + sinA * outer)
                 }
-                drawPath(check, color, style = Stroke(stroke * .8f))
+
+                val checkPath = Path().apply {
+                    moveTo(center.x - radius * 0.55f, center.y)
+                    lineTo(center.x - radius * 0.10f, center.y + radius * 0.42f)
+                    lineTo(center.x + radius * 0.65f, center.y - radius * 0.45f)
+                }
+
+                onDrawBehind {
+                    drawCircle(color, radius, center, style = circleStroke)
+                    for ((start, end) in rayOffsets) {
+                        drawLine(
+                            color,
+                            start,
+                            end,
+                            strokeWidth = rayStroke,
+                            cap = androidx.compose.ui.graphics.StrokeCap.Round
+                        )
+                    }
+                    when (assessment) {
+                        LightingAssessment.ACCEPTABLE -> {
+                            drawPath(checkPath, color, style = checkStroke)
+                        }
+                        LightingAssessment.UNEVEN,
+                        LightingAssessment.TOO_DARK,
+                        LightingAssessment.HIGH_CONTRAST,
+                        LightingAssessment.TOO_BRIGHT -> {
+                            drawLine(
+                                color,
+                                Offset(center.x, center.y - radius * 0.5f),
+                                Offset(center.x, center.y + radius * 0.15f),
+                                strokeWidth = exclamStroke
+                            )
+                            drawCircle(color, dotRadius, Offset(center.x, center.y + radius * 0.55f))
+                        }
+                        LightingAssessment.UNKNOWN -> Unit
+                    }
+                }
             }
-            LightingAssessment.UNEVEN,
-            LightingAssessment.TOO_DARK,
-            LightingAssessment.HIGH_CONTRAST,
-            LightingAssessment.TOO_BRIGHT -> {
-                drawLine(color, Offset(center.x, center.y - radius * .5f),
-                    Offset(center.x, center.y + radius * .15f), strokeWidth = stroke * .75f)
-                drawCircle(color, stroke * .42f, Offset(center.x, center.y + radius * .55f))
-            }
-            LightingAssessment.UNKNOWN -> Unit
-        }
-    }
+    )
 }
 
 @Composable
-private fun TrackingOverlay(state: CaptureUiState, modifier: Modifier) {
-    Canvas(modifier) {
-        state.trackedFace?.let { face ->
-            drawOval(Color(0xFF00FF87),
-                Offset((face.x - face.width / 2) * size.width, (face.y - face.height / 2) * size.height),
-                Size(face.width * size.width, face.height * size.height), style = Stroke(5.dp.toPx()))
+private fun TrackingOverlay(
+    trackedFace: PositioningFace?,
+    modifier: Modifier = Modifier
+) {
+    Spacer(
+        modifier = modifier.drawWithCache {
+            val stroke = Stroke(5.dp.toPx())
+            val trackingColor = Color(0xFF00FF87)
+            onDrawBehind {
+                trackedFace?.let { face ->
+                    drawOval(
+                        color = trackingColor,
+                        topLeft = Offset((face.x - face.width / 2f) * size.width, (face.y - face.height / 2f) * size.height),
+                        size = Size(face.width * size.width, face.height * size.height),
+                        style = stroke
+                    )
+                }
+            }
         }
-    }
+    )
 }
 
 private fun CaptureGuidance.messageResource(): Int = when (this) {
@@ -221,4 +271,80 @@ private fun CameraFailure.messageResource(): Int = when (this) {
     CameraFailure.UNAVAILABLE -> R.string.camera_unavailable
     CameraFailure.PERMISSION_DENIED -> R.string.camera_permission_title
     CameraFailure.DETECTOR_UNAVAILABLE -> R.string.detector_unavailable
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun CaptureScreenPermissionPreview() {
+    CaptureScreen(
+        state = CaptureUiState(permissionGranted = false),
+        onAction = {},
+        requestPermission = {},
+        openSettings = {},
+        exit = {},
+        preview = { Box(it) }
+    )
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun CaptureScreenPositioningPreview() {
+    CaptureScreen(
+        state = CaptureUiState(
+            permissionGranted = true,
+            showPositioningMask = true,
+            hint = CaptureGuidance.PLACE_FACE
+        ),
+        onAction = {},
+        requestPermission = {},
+        openSettings = {},
+        exit = {},
+        preview = { Box(it) }
+    )
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun CaptureScreenTrackingPreview() {
+    CaptureScreen(
+        state = CaptureUiState(
+            permissionGranted = true,
+            showPositioningMask = false,
+            showReturnGuide = true,
+            hint = CaptureGuidance.FOLLOWING,
+            trackedFace = PositioningFace(0.5f, 0.5f, 0.35f, 0.45f, 0f, 0f, 0f),
+            lightingIndicator = LightingIndicatorUiState(
+                visible = true,
+                assessment = LightingAssessment.ACCEPTABLE
+            )
+        ),
+        onAction = {},
+        requestPermission = {},
+        openSettings = {},
+        exit = {},
+        preview = { Box(it) }
+    )
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun CaptureScreenLightingWarningPreview() {
+    CaptureScreen(
+        state = CaptureUiState(
+            permissionGranted = true,
+            showPositioningMask = false,
+            showReturnGuide = true,
+            hint = CaptureGuidance.MORE_LIGHT,
+            lightingIndicator = LightingIndicatorUiState(
+                visible = true,
+                assessment = LightingAssessment.TOO_DARK,
+                expanded = true
+            )
+        ),
+        onAction = {},
+        requestPermission = {},
+        openSettings = {},
+        exit = {},
+        preview = { Box(it) }
+    )
 }
