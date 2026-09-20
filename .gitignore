@@ -26,6 +26,7 @@ captures/
 .idea/libraries/
 .idea/modules.xml
 .idea/workspace.xml
+.idea/misc.xml
 .idea/navEditor.xml
 .idea/assetWizardSettings.xml
 .idea/deploymentTargetSelector.xml

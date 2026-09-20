@@ -3,6 +3,7 @@ package com.xim.facetracking.infrastructure.camera
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.view.CameraController
@@ -10,11 +11,26 @@ import androidx.camera.view.LifecycleCameraController
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
-import com.xim.facetracking.domain.*
+import com.xim.facetracking.domain.CameraFailure
+import com.xim.facetracking.domain.CameraProblem
+import com.xim.facetracking.domain.CaptureClock
+import com.xim.facetracking.domain.FaceTrackingPort
+import com.xim.facetracking.domain.TrackingObservation
 import com.xim.facetracking.infrastructure.analysis.MlKitFaceAnalyzer
-import java.util.concurrent.Executors
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import java.util.concurrent.Executors
+import kotlin.time.Duration.Companion.milliseconds
+
+private const val TAG = "CameraXTrackingSession"
+private const val STALL_MS = 5_000L
 
 /** Main-thread camera ownership. The preview bridge attaches a view; the port controls monitoring. */
 class CameraXTrackingSession(context: Context, private val clock: CaptureClock) : FaceTrackingPort {
@@ -30,10 +46,9 @@ class CameraXTrackingSession(context: Context, private val clock: CaptureClock) 
     private var executor: java.util.concurrent.ExecutorService? = null
     private var requestedSession: Long? = null
     private var generation = 0L
-    private var lastObservation = 0L
-    private val handler = Handler(Looper.getMainLooper())
-    private var watchdog: Runnable? = null
-
+    private var lastArrivalMs = 0L
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var watchdog: Job? = null
     fun attach(view: PreviewView, lifecycleOwner: LifecycleOwner) {
         if (preview === view) return
         releaseCamera()
@@ -77,12 +92,19 @@ class CameraXTrackingSession(context: Context, private val clock: CaptureClock) 
             val worker = Executors.newSingleThreadExecutor()
             executor = worker
             val main = ContextCompat.getMainExecutor(appContext)
-            val detector = MlKitFaceAnalyzer(id, clock, main, { view.width to view.height }, { observation ->
-                if (token == generation && requestedSession == id) {
-                    lastObservation = observation.timestampMs
-                    samples.trySend(observation)
-                }
-            }, { fail(id, token, CameraFailure.DETECTOR_UNAVAILABLE) })
+            val detector = MlKitFaceAnalyzer(
+                id,
+                clock,
+                main,
+                { view.width to view.height },
+                { observation ->
+                    if (token == generation && requestedSession == id) {
+                        lastArrivalMs = clock.monotonicMs()
+                        samples.trySend(observation)
+                    }
+                },
+                { fail(id, token, CameraFailure.DETECTOR_UNAVAILABLE) }
+            )
             analyzer = detector
             camera.setImageAnalysisAnalyzer(worker, detector)
             view.controller = camera
@@ -91,19 +113,30 @@ class CameraXTrackingSession(context: Context, private val clock: CaptureClock) 
                 if (token == generation) {
                     try {
                         camera.initializationFuture.get()
-                        if (!camera.hasCamera(CameraSelector.DEFAULT_FRONT_CAMERA)) fail(id, token, CameraFailure.UNAVAILABLE)
-                    } catch (_: Exception) { fail(id, token, CameraFailure.UNAVAILABLE) }
+                        if (!camera.hasCamera(CameraSelector.DEFAULT_FRONT_CAMERA)) fail(
+                            id,
+                            token,
+                            CameraFailure.UNAVAILABLE
+                        )
+                    } catch (_: Exception) {
+                        fail(id, token, CameraFailure.UNAVAILABLE)
+                    }
                 }
             }, main)
-            lastObservation = clock.monotonicMs()
-            watchdog = object : Runnable {
-                override fun run() {
-                    if (token != generation || requestedSession != id) return
+            lastArrivalMs = clock.monotonicMs()
+
+            watchdog = scope.launch {
+                while (isActive) {
+                    delay(WATCHDOG_INTERVAL_MS.milliseconds)
+                    Log.w(TAG, "analysis stalled; check updateTransform delivery and detector state")
                     val now = clock.monotonicMs()
-                    if (now - lastObservation > 300L) samples.trySend(TrackingObservation(id, now, 0, null))
-                    handler.postDelayed(this, 100L)
+                    if (now - lastArrivalMs > STALL_MS) {
+                        fail(id, token, CameraFailure.DETECTOR_UNAVAILABLE)
+                    }
+                    return@launch
                 }
-            }.also { handler.postDelayed(it, 100L) }
+            }
+
         } catch (_: SecurityException) {
             fail(id, token, CameraFailure.PERMISSION_DENIED)
         } catch (_: Exception) {
@@ -119,7 +152,7 @@ class CameraXTrackingSession(context: Context, private val clock: CaptureClock) 
 
     private fun releaseCamera() {
         generation++ // Invalidates callbacks before resource teardown.
-        watchdog?.let(handler::removeCallbacks)
+        watchdog?.cancel()
         watchdog = null
         controller?.clearImageAnalysisAnalyzer()
         controller?.unbind()
@@ -129,5 +162,11 @@ class CameraXTrackingSession(context: Context, private val clock: CaptureClock) 
         analyzer = null
         executor?.shutdown()
         executor = null
+    }
+
+    private companion object {
+        const val TAG = "CameraXTrackingSession"
+        const val WATCHDOG_INTERVAL_MS = 250L
+        const val STALL_MS = 5_000L
     }
 }

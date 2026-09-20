@@ -1,6 +1,7 @@
 package com.xim.facetracking.infrastructure.analysis
 
 import android.graphics.Matrix
+import android.util.Log
 import android.util.Size
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
@@ -12,6 +13,8 @@ import com.xim.facetracking.domain.PositioningFace
 import com.xim.facetracking.domain.TrackingObservation
 import java.util.concurrent.Executor
 import java.util.concurrent.ConcurrentHashMap
+
+private const val TAG = "MlKitFaceAnalyzer"
 
 /** Session-scoped detector adapter. ML Kit owns frame closure after analyze(). */
 class MlKitFaceAnalyzer(
@@ -61,7 +64,10 @@ class MlKitFaceAnalyzer(
 
     override fun getDefaultTargetResolution(): Size = delegate.defaultTargetResolution
     override fun getTargetCoordinateSystem(): Int = delegate.targetCoordinateSystem
-    override fun updateTransform(matrix: Matrix?) = delegate.updateTransform(matrix)
+    override fun updateTransform(matrix: Matrix?) {
+        Log.d(TAG, "updateTransform matrix=${matrix != null}")
+        delegate.updateTransform(matrix)
+    }
 
     override fun close() {
         closed = true
