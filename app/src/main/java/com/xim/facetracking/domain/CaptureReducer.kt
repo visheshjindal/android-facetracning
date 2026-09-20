@@ -9,7 +9,7 @@ class CaptureReducer(private val positioningPolicy: PositioningPolicy) {
                 (state.positioning.lastSample?.let { value.timestampMs <= it } == true)) return CaptureTransition(state)
             return CaptureTransition(state.copy(
                 positioning = positioningPolicy.update(state.positioning, value.timestampMs, value.face, value.faceCount, state.target),
-                face = value.face.takeIf { value.faceCount == 1 }
+                face = value.face.takeIf { value.faceCount > 0 }
             ))
         }
         if (event is CaptureEvent.Failed && (!state.monitoring || event.value.sessionId != state.sessionId)) return CaptureTransition(state)

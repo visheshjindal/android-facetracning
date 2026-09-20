@@ -24,14 +24,12 @@ fun positioningTarget(width: Float, height: Float): PositioningTarget {
 class PositioningPolicy {
     fun update(state: PositioningState, now: Long, face: PositioningFace?, count: Int, target: PositioningTarget): PositioningState {
         if (state.lastSample != null && now <= state.lastSample) return state
-        val visible = face != null && count == 1
+        val visible = face != null && count > 0
         if (state.following) return state.copy(lastSample = now, hint = when {
-            count > 1 -> PositioningHint.ONE_PERSON
             !visible -> PositioningHint.PLACE_FACE
             else -> PositioningHint.FOLLOWING
         })
         val hint = when {
-            count > 1 -> PositioningHint.ONE_PERSON
             !visible || target.width <= 0f -> PositioningHint.PLACE_FACE
             abs(face!!.x - 0.5f) > target.width * 0.10f || abs(face.y - 0.5f) > target.height * 0.10f -> PositioningHint.CENTER_FACE
             face.width > target.width * 0.95f || face.height > target.height * 0.95f -> PositioningHint.FARTHER

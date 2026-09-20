@@ -7,6 +7,7 @@ import androidx.camera.core.ImageProxy
 import androidx.camera.mlkit.vision.MlKitAnalyzer
 import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetectorOptions
+import com.xim.facetracking.domain.FirstFaceLock
 import com.xim.facetracking.domain.CaptureClock
 import com.xim.facetracking.domain.PositioningFace
 import com.xim.facetracking.domain.TrackingObservation
@@ -17,34 +18,35 @@ import java.util.concurrent.ConcurrentHashMap
 class MlKitFaceAnalyzer(
     private val sessionId: Long,
     private val clock: CaptureClock,
+    private val faceLock: FirstFaceLock,
+    private val detectorGeneration: Long,
     callbackExecutor: Executor,
     private val viewport: () -> Pair<Int, Int>,
     onObservation: (TrackingObservation) -> Unit,
     onFailure: () -> Unit
 ) : ImageAnalysis.Analyzer, AutoCloseable {
-    private val detailed = FaceDetection.getClient(FaceDetectorOptions.Builder()
+    private val detector = FaceDetection.getClient(FaceDetectorOptions.Builder()
         .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
-        .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL)
-        .setContourMode(FaceDetectorOptions.CONTOUR_MODE_ALL).build())
-    private val multiple = FaceDetection.getClient(FaceDetectorOptions.Builder()
-        .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
-        .setContourMode(FaceDetectorOptions.CONTOUR_MODE_NONE).build())
+        .setContourMode(FaceDetectorOptions.CONTOUR_MODE_NONE)
+        .enableTracking()
+        .build())
     @Volatile private var closed = false
     private val frameTimes = ConcurrentHashMap<Long, Long>()
     private val delegate = MlKitAnalyzer(
-        listOf(detailed, multiple), ImageAnalysis.COORDINATE_SYSTEM_VIEW_REFERENCED, callbackExecutor
+        listOf(detector), ImageAnalysis.COORDINATE_SYSTEM_VIEW_REFERENCED, callbackExecutor
     ) { result ->
         if (!closed) {
             val sampleTimeMs = frameTimes.remove(result.timestamp) ?: return@MlKitAnalyzer
-            val faces = result.getValue(detailed)
-            val allFaces = result.getValue(multiple)
-            if (faces == null || allFaces == null) {
+            val faces = result.getValue(detector)
+            if (faces == null) {
                 onFailure()
             } else {
                 val (width, height) = viewport()
-                val primary = faces.firstOrNull()
                 val fresh = clock.monotonicMs() - sampleTimeMs <= 300L
-                val face = primary?.takeIf { fresh && width > 0 && height > 0 }?.let {
+                val selected = if (fresh && width > 0 && height > 0) {
+                    faceLock.select(detectorGeneration, sampleTimeMs, faces.map { it.trackingId })
+                } else null
+                val face = selected?.let { faces[it] }?.let {
                     val box = it.boundingBox
                     PositioningFace(
                         box.exactCenterX() / width, box.exactCenterY() / height,
@@ -52,7 +54,7 @@ class MlKitFaceAnalyzer(
                         it.headEulerAngleY, it.headEulerAngleX, it.headEulerAngleZ
                     )
                 }
-                onObservation(TrackingObservation(sessionId, sampleTimeMs, allFaces.size, face))
+                onObservation(TrackingObservation(sessionId, sampleTimeMs, faces.size, face))
             }
         }
     }
@@ -70,7 +72,6 @@ class MlKitFaceAnalyzer(
     override fun close() {
         closed = true
         frameTimes.clear()
-        detailed.close()
-        multiple.close()
+        detector.close()
     }
 }

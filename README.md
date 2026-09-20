@@ -2,7 +2,7 @@
 
 Native Android application using Kotlin, Compose, CameraX and on-device ML Kit detection.
 
-The app positions one face inside a centered white oval mask. After two seconds of stable alignment, the mask fades and an outline follows the detected face. Tracking loss hides the outline and guidance helps the user recover.
+The app positions one face inside a centered white oval mask. After two seconds of stable alignment, the mask fades and an outline follows the detected face. The first detected face with a tracking ID is locked for the monitoring session, including the initial alignment phase. Other faces do not interrupt alignment or take over the outline; simultaneous initial detections use detector order. Tracking loss hides the outline. The same tracking ID can resume, but a different ID (including after detector recreation) requires a new monitoring session. ML Kit tracking IDs provide video-track continuity, not biometric identity recognition; crossing faces and reacquisition still require device validation.
 
 ## MVI and clean architecture
 

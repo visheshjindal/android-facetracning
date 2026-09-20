@@ -35,13 +35,18 @@ class PositioningPolicyTest {
         }
     }
 
-    @Test fun gapsAndMultipleFacesResetStability() {
+    @Test fun gapsResetStabilityButOtherFacesDoNot() {
         var state = PositioningState()
         for (time in 0L..1500L step 100) state = policy.update(state, time, face, 1, target)
         state = policy.update(state, 2100, face, 1, target)
         assertEquals(2100L, state.stableSince)
         state = policy.update(state, 2200, face, 2, target)
-        assertNull(state.stableSince)
+        assertEquals(2100L, state.stableSince)
         assertFalse(state.following)
+        for (time in 2300L..4100L step 100) state = policy.update(state, time, face, 2, target)
+        assertTrue(state.following)
+        assertEquals(PositioningHint.FOLLOWING, state.hint)
+        state = policy.update(state, 4200, null, 1, target)
+        assertEquals(PositioningHint.PLACE_FACE, state.hint)
     }
 }

@@ -29,6 +29,7 @@ class CameraXTrackingSession(context: Context, private val clock: CaptureClock) 
     private var analyzer: MlKitFaceAnalyzer? = null
     private var executor: java.util.concurrent.ExecutorService? = null
     private var requestedSession: Long? = null
+    private var faceLock = FirstFaceLock()
     private var generation = 0L
     private var lastObservation = 0L
     private val handler = Handler(Looper.getMainLooper())
@@ -51,6 +52,7 @@ class CameraXTrackingSession(context: Context, private val clock: CaptureClock) 
 
     override fun start(sessionId: Long) {
         releaseCamera()
+        faceLock = FirstFaceLock()
         requestedSession = sessionId
         bindIfPossible()
     }
@@ -77,7 +79,7 @@ class CameraXTrackingSession(context: Context, private val clock: CaptureClock) 
             val worker = Executors.newSingleThreadExecutor()
             executor = worker
             val main = ContextCompat.getMainExecutor(appContext)
-            val detector = MlKitFaceAnalyzer(id, clock, main, { view.width to view.height }, { observation ->
+            val detector = MlKitFaceAnalyzer(id, clock, faceLock, token, main, { view.width to view.height }, { observation ->
                 if (token == generation && requestedSession == id) {
                     lastObservation = observation.timestampMs
                     samples.trySend(observation)

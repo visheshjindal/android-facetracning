@@ -44,6 +44,21 @@ class CaptureReducerTest {
         assertEquals(listOf(CaptureCommand.StartTracking(2)), retry.commands)
     }
 
+    @Test fun additionalFacesDoNotHideSelectedFaceAndCannotReplaceMissingTrack() {
+        val initial = active()
+        val face = PositioningFace(.5f, .5f, .3f, .3f, 0f, 0f, 0f)
+        val visible = reducer.reduce(initial, CaptureEvent.Observation(
+            TrackingObservation(initial.sessionId, 100, 2, face)
+        )).state
+        assertEquals(face, visible.face)
+        assertNotEquals(PositioningHint.ONE_PERSON, visible.positioning.hint)
+        val missing = reducer.reduce(visible, CaptureEvent.Observation(
+            TrackingObservation(initial.sessionId, 200, 1, null)
+        )).state
+        assertNull(missing.face)
+        assertEquals(PositioningHint.PLACE_FACE, missing.positioning.hint)
+    }
+
     @Test fun revokingPermissionStopsMonitoring() {
         val result = reducer.reduce(active(), CaptureEvent.Permission(false))
         assertFalse(result.state.monitoring)
