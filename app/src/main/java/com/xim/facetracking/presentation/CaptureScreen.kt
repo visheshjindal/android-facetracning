@@ -42,6 +42,7 @@ fun CaptureScreen(
                 onAction(CaptureIntent.ViewportChanged(it.width.toFloat(), it.height.toFloat()))
             }) {
                 preview(Modifier.fillMaxSize())
+                FaceReturnGuide(state.showReturnGuide, Modifier.fillMaxSize())
                 TrackingOverlay(state, Modifier.fillMaxSize())
                 PositioningMask(state.showPositioningMask, Modifier.fillMaxSize())
                 Column(Modifier.align(Alignment.TopCenter).fillMaxWidth()

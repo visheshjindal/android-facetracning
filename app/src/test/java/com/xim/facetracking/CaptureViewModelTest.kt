@@ -45,6 +45,7 @@ class CaptureViewModelTest {
             runCurrent()
         }
         assertFalse(vm.state.value.showPositioningMask)
+        assertTrue(vm.state.value.showReturnGuide)
         assertEquals(face, vm.state.value.trackedFace)
         vm.onAction(CaptureIntent.Stopped)
         vm.onAction(CaptureIntent.Resumed)
@@ -53,6 +54,7 @@ class CaptureViewModelTest {
         port.samples.send(TrackingObservation(1, 2200, face))
         runCurrent()
         assertTrue(vm.state.value.showPositioningMask)
+        assertFalse(vm.state.value.showReturnGuide)
         assertNull(vm.state.value.trackedFace)
         vm.onAction(CaptureIntent.Stopped)
         runCurrent()
@@ -60,7 +62,7 @@ class CaptureViewModelTest {
         port.failures.close()
     }
 
-    @Test fun trackingLossOffersRecoveryWithoutOvalAndRestartRestoresAlignment() = runTest(dispatcher) {
+    @Test fun trackingLossKeepsReturnGuideAndRestartRestoresAlignment() = runTest(dispatcher) {
         val port = FakeTracking()
         val vm = CaptureViewModel(port, CaptureReducer(PositioningPolicy()))
         vm.onAction(CaptureIntent.PermissionResult(true))
@@ -76,6 +78,7 @@ class CaptureViewModelTest {
         port.samples.send(TrackingObservation(1, 2100, null))
         runCurrent()
         assertFalse(vm.state.value.showPositioningMask)
+        assertTrue(vm.state.value.showReturnGuide)
         assertNull(vm.state.value.trackedFace)
         assertEquals(PositioningHint.TRACKING_LOST, vm.state.value.hint)
         val recoveredPrimary = face.copy(x = .55f)
@@ -84,6 +87,7 @@ class CaptureViewModelTest {
         assertEquals(PositioningHint.FOLLOWING, vm.state.value.hint)
         assertEquals(recoveredPrimary, vm.state.value.trackedFace)
         assertFalse(vm.state.value.showPositioningMask)
+        assertTrue(vm.state.value.showReturnGuide)
         val offCenterFace = face.copy(x = .2f)
         port.samples.send(TrackingObservation(1, 2600, offCenterFace))
         runCurrent()
@@ -97,6 +101,7 @@ class CaptureViewModelTest {
         runCurrent()
         assertEquals(listOf(1L, 2L), port.sessions)
         assertTrue(vm.state.value.showPositioningMask)
+        assertFalse(vm.state.value.showReturnGuide)
         assertEquals(PositioningHint.PLACE_FACE, vm.state.value.hint)
         assertNull(vm.state.value.trackedFace)
         port.samples.send(TrackingObservation(1, 2800, face))

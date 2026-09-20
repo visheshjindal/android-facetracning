@@ -5,6 +5,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.xim.facetracking.domain.PositioningHint
@@ -30,15 +31,17 @@ class CaptureScreenTest {
         assertEquals(1, requests)
     }
 
-    @Test fun trackingLossOffersRestartInsteadOfHiddenOvalGuidance() {
+    @Test fun trackingLossKeepsReturnGuideAndOffersRestart() {
         val actions = mutableListOf<CaptureIntent>()
         compose.setContent {
             MaterialTheme {
                 CaptureScreen(CaptureUiState(permissionGranted = true, showPositioningMask = false,
-                    hint = PositioningHint.TRACKING_LOST), actions::add, {}, {}, {}, { Box(it) })
+                    showReturnGuide = true, hint = PositioningHint.TRACKING_LOST),
+                    actions::add, {}, {}, {}, { Box(it) })
             }
         }
-        compose.onNodeWithText("Tracking lost — look back at the camera, or restart tracking").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Face return guide").assertIsDisplayed()
+        compose.onNodeWithText("Tracking lost — return your face to the outline").assertIsDisplayed()
         compose.onNodeWithText("Restart tracking").performClick()
         assertEquals(listOf(CaptureIntent.Retry), actions.filterIsInstance<CaptureIntent.Retry>())
     }
@@ -49,7 +52,14 @@ class CaptureScreenTest {
             MaterialTheme { CaptureScreen(state.value, {}, {}, {}, {}, { Box(it) }) }
         }
         compose.onNodeWithText("Place your face inside the oval").assertIsDisplayed()
-        compose.runOnIdle { state.value = state.value.copy(showPositioningMask = false, hint = PositioningHint.FOLLOWING) }
+        compose.runOnIdle {
+            state.value = state.value.copy(
+                showPositioningMask = false,
+                showReturnGuide = true,
+                hint = PositioningHint.FOLLOWING
+            )
+        }
+        compose.onNodeWithContentDescription("Face return guide").assertIsDisplayed()
         compose.onNodeWithText("Face positioned — following your face").assertIsDisplayed()
     }
 
@@ -58,6 +68,7 @@ class CaptureScreenTest {
         val state = CaptureUiState(
             permissionGranted = true,
             showPositioningMask = false,
+            showReturnGuide = true,
             hint = PositioningHint.MOVE_RIGHT,
             trackedFace = trackedFace
         )

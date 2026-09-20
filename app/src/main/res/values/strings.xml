@@ -19,6 +19,7 @@
     <string name="position_straight">Look straight at the camera</string>
     <string name="position_hold">Hold still for a moment</string>
     <string name="position_following">Face positioned — following your face</string>
-    <string name="position_tracking_lost">Tracking lost — look back at the camera, or restart tracking</string>
+    <string name="position_tracking_lost">Tracking lost — return your face to the outline</string>
+    <string name="face_return_guide_description">Face return guide</string>
     <string name="restart_tracking">Restart tracking</string>
 </resources>

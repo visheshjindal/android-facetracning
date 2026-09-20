@@ -18,6 +18,7 @@ sealed interface CaptureIntent {
 data class CaptureUiState(
     val permissionGranted: Boolean = false,
     val showPositioningMask: Boolean = true,
+    val showReturnGuide: Boolean = false,
     val hint: PositioningHint = PositioningHint.PLACE_FACE,
     val trackedFace: PositioningFace? = null,
     val failure: CameraFailure? = null
@@ -55,6 +56,7 @@ class CaptureViewModel(
         mutableState.value = CaptureUiState(
             permissionGranted = domainState.permissionGranted,
             showPositioningMask = !domainState.positioning.following,
+            showReturnGuide = domainState.positioning.following,
             hint = domainState.positioning.hint,
             trackedFace = domainState.face.takeIf { domainState.positioning.following },
             failure = domainState.failure
