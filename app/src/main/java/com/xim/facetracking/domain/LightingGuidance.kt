@@ -30,6 +30,28 @@ data class SparseLumaFrame(
         require(columns > 0 && rows > 0)
         require(values.size == columns * rows)
     }
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is SparseLumaFrame) return false
+
+        if (sourceWidth != other.sourceWidth) return false
+        if (sourceHeight != other.sourceHeight) return false
+        if (columns != other.columns) return false
+        if (rows != other.rows) return false
+        if (!values.contentEquals(other.values)) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = sourceWidth
+        result = 31 * result + sourceHeight
+        result = 31 * result + columns
+        result = 31 * result + rows
+        result = 31 * result + values.contentHashCode()
+        return result
+    }
 }
 
 data class FaceLightingMetrics(

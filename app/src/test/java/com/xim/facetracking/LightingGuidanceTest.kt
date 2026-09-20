@@ -253,6 +253,17 @@ class LightingGuidanceTest {
         assertEquals(LightingAssessment.ACCEPTABLE, advance(reset, neutral).assessment)
     }
 
+    @Test fun sparseLumaFrameSupportsStructuralEqualityAndHashCode() {
+        val frame1 = frame { _, _ -> 120 }
+        val frame2 = frame { _, _ -> 120 }
+        val frame3 = frame { _, _ -> 121 }
+
+        assertEquals(frame1, frame2)
+        assertEquals(frame1.hashCode(), frame2.hashCode())
+        assertNotEquals(frame1, frame3)
+    }
+
+
     private fun advance(initial: LightingState, metrics: FaceLightingMetrics): LightingState {
         val policy = LightingPolicy()
         var state = initial
