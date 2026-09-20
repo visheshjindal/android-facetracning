@@ -6,6 +6,7 @@ import androidx.camera.view.PreviewView
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
 import com.xim.facetracking.domain.CaptureReducer
 import com.xim.facetracking.domain.PositioningPolicy
 import com.xim.facetracking.infrastructure.AndroidCaptureClock
@@ -15,7 +16,11 @@ import com.xim.facetracking.presentation.PreviewHost
 
 /** Retained composition owner contains no activity/view references while detached. */
 class CaptureGraph(context: Context) : ViewModel() {
-    private val tracking = CameraXTrackingSession(context.applicationContext, AndroidCaptureClock())
+    private val tracking = CameraXTrackingSession(
+        context.applicationContext,
+        AndroidCaptureClock(),
+        viewModelScope,
+    )
     val viewModelFactory: ViewModelProvider.Factory = object : ViewModelProvider.Factory {
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             require(modelClass == CaptureViewModel::class.java)

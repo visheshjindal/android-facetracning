@@ -16,9 +16,7 @@ import com.xim.facetracking.domain.FaceTrackingPort
 import com.xim.facetracking.domain.TrackingObservation
 import com.xim.facetracking.infrastructure.analysis.MlKitFaceAnalyzer
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -28,7 +26,11 @@ import java.util.concurrent.Executors
 import kotlin.time.Duration.Companion.milliseconds
 
 /** Main-thread camera ownership. The preview bridge attaches a view; the port controls monitoring. */
-class CameraXTrackingSession(context: Context, private val clock: CaptureClock) : FaceTrackingPort {
+class CameraXTrackingSession(
+    context: Context,
+    private val clock: CaptureClock,
+    private val scope: CoroutineScope,
+) : FaceTrackingPort {
     private val appContext = context.applicationContext
     private val samples = Channel<TrackingObservation>(Channel.CONFLATED)
     private val failures = Channel<CameraProblem>(Channel.UNLIMITED)
@@ -42,7 +44,6 @@ class CameraXTrackingSession(context: Context, private val clock: CaptureClock) 
     private var requestedSession: Long? = null
     private var generation = 0L
     private var lastArrivalMs = 0L
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var watchdog: Job? = null
     fun attach(view: PreviewView, lifecycleOwner: LifecycleOwner) {
         if (preview === view) return
@@ -123,12 +124,12 @@ class CameraXTrackingSession(context: Context, private val clock: CaptureClock) 
             watchdog = scope.launch {
                 while (isActive) {
                     delay(WATCHDOG_INTERVAL_MS.milliseconds)
-                    Log.w(TAG, "analysis stalled; check updateTransform delivery and detector state")
                     val now = clock.monotonicMs()
                     if (now - lastArrivalMs > STALL_MS) {
+                        Log.w(TAG, "analysis stalled; check updateTransform delivery and detector state")
                         fail(id, token, CameraFailure.DETECTOR_UNAVAILABLE)
+                        break
                     }
-                    return@launch
                 }
             }
 
