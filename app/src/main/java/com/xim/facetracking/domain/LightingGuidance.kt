@@ -41,10 +41,15 @@ data class FaceLightingMetrics(
     val highlightFraction: Float,
     val sampleCount: Int,
     val leftSampleCount: Int,
-    val rightSampleCount: Int
+    val rightSampleCount: Int,
+    val topTrimmedMeanLuma: Float,
+    val bottomTrimmedMeanLuma: Float,
+    val topSampleCount: Int,
+    val bottomSampleCount: Int
 )
 
-enum class LightingAssessment { UNKNOWN, EVEN, UNEVEN, TOO_DARK, TOO_BRIGHT }
+/** ACCEPTABLE means no supported warning persisted; it is not a quality certification. */
+enum class LightingAssessment { UNKNOWN, ACCEPTABLE, UNEVEN, TOO_DARK, TOO_BRIGHT, HIGH_CONTRAST }
 enum class ShadowSide { USER_LEFT, USER_RIGHT }
 
 data class LightingState(
@@ -53,16 +58,17 @@ data class LightingState(
     val candidateAssessment: LightingAssessment? = null,
     val candidateShadowSide: ShadowSide? = null,
     val candidateSinceMs: Long? = null,
-    val evenSinceMs: Long? = null,
+    val acceptableSinceMs: Long? = null,
     val lastSampleMs: Long? = null
 ) {
     fun isCompact(nowMs: Long): Boolean =
-        assessment == LightingAssessment.EVEN && evenSinceMs?.let { nowMs - it >= 1_500L } == true
+        assessment == LightingAssessment.ACCEPTABLE && acceptableSinceMs?.let { nowMs - it >= 1_500L } == true
 }
 
+/** Provisional heuristic thresholds; see CaptureSpec and docs/lighting-validation.md. */
 data class LightingConfig(
     val enterWarningMs: Long = 400L,
-    val acceptEvenMs: Long = 700L,
+    val acceptOkayMs: Long = 700L,
     val maxGapMs: Long = 300L,
     val darkMedianEnter: Float = 55f,
     val darkMedianExit: Float = 65f,
@@ -76,12 +82,32 @@ data class LightingConfig(
     val unevenDifferenceExit: Float = 20f,
     val unevenRatioEnter: Float = 0.75f,
     val unevenRatioExit: Float = 0.82f,
+    val shadowLuma: Int = 24,
+    val highlightLuma: Int = 235,
     val minimumSamples: Int = 96,
     val minimumSideSamples: Int = 32
-)
+) {
+    init {
+        require(enterWarningMs > 0 && acceptOkayMs > 0 && maxGapMs > 0)
+        require(darkMedianEnter in 0f..<darkMedianExit)
+        require(darkMedianExit < brightMedianExit && brightMedianExit < brightMedianEnter)
+        require(brightMedianEnter <= 255f)
+        require(shadowFractionExit in 0f..1f && shadowFractionEnter in 0f..1f &&
+            shadowFractionExit < shadowFractionEnter)
+        require(highlightFractionExit in 0f..1f && highlightFractionEnter in 0f..1f &&
+            highlightFractionExit < highlightFractionEnter)
+        require(
+            unevenDifferenceExit in 0f..<unevenDifferenceEnter &&
+            unevenDifferenceEnter <= 255f)
+        require(unevenRatioEnter in 0f..1f && unevenRatioExit in 0f..1f &&
+            unevenRatioEnter < unevenRatioExit)
+        require(shadowLuma in 0..255 && highlightLuma in 0..255 && shadowLuma < highlightLuma)
+        require(minimumSamples > 0 && minimumSideSamples > 0)
+    }
+}
 
 /** Pure image metric. The caller supplies a copied luma grid and an SDK-free transform. */
-class FaceLightingMeasurer(private val config: LightingConfig = LightingConfig()) {
+class FaceLightingMeasurer(private val config: LightingConfig = CaptureSpec.lighting) {
     fun measure(
         frame: SparseLumaFrame,
         imageToView: AffineTransform2D,
@@ -94,9 +120,13 @@ class FaceLightingMeasurer(private val config: LightingConfig = LightingConfig()
         val all = IntArray(LUMA_LEVELS)
         val left = IntArray(LUMA_LEVELS)
         val right = IntArray(LUMA_LEVELS)
+        val top = IntArray(LUMA_LEVELS)
+        val bottom = IntArray(LUMA_LEVELS)
         var allCount = 0
         var leftCount = 0
         var rightCount = 0
+        var topCount = 0
+        var bottomCount = 0
         var shadowCount = 0
         var highlightCount = 0
 
@@ -110,6 +140,7 @@ class FaceLightingMeasurer(private val config: LightingConfig = LightingConfig()
                 val v = (viewY - (face.y - face.height / 2f)) / face.height
                 val ellipseX = (u - 0.5f) / INNER_RADIUS_X
                 val ellipseY = (v - 0.5f) / INNER_RADIUS_Y
+                if (!u.isFinite() || !v.isFinite()) return null
                 if (ellipseX * ellipseX + ellipseY * ellipseY > 1f) continue
 
                 val value = frame.values[row * frame.columns + column].toInt() and 0xff
@@ -122,13 +153,21 @@ class FaceLightingMeasurer(private val config: LightingConfig = LightingConfig()
                     right[value]++
                     rightCount++
                 }
-                if (value <= SHADOW_LUMA) shadowCount++
-                if (value >= HIGHLIGHT_LUMA) highlightCount++
+                if (v < 0.5f) {
+                    top[value]++
+                    topCount++
+                } else {
+                    bottom[value]++
+                    bottomCount++
+                }
+                if (value <= config.shadowLuma) shadowCount++
+                if (value >= config.highlightLuma) highlightCount++
             }
         }
 
         if (allCount < config.minimumSamples || leftCount < config.minimumSideSamples ||
-            rightCount < config.minimumSideSamples) return null
+            rightCount < config.minimumSideSamples || topCount < config.minimumSideSamples ||
+            bottomCount < config.minimumSideSamples) return null
 
         return FaceLightingMetrics(
             medianLuma = median(all, allCount),
@@ -139,7 +178,11 @@ class FaceLightingMeasurer(private val config: LightingConfig = LightingConfig()
             highlightFraction = highlightCount.toFloat() / allCount,
             sampleCount = allCount,
             leftSampleCount = leftCount,
-            rightSampleCount = rightCount
+            rightSampleCount = rightCount,
+            topTrimmedMeanLuma = trimmedMean(top, topCount),
+            bottomTrimmedMeanLuma = trimmedMean(bottom, bottomCount),
+            topSampleCount = topCount,
+            bottomSampleCount = bottomCount
         )
     }
 
@@ -188,14 +231,12 @@ class FaceLightingMeasurer(private val config: LightingConfig = LightingConfig()
     private companion object {
         const val INNER_RADIUS_X = 0.40f
         const val INNER_RADIUS_Y = 0.38f
-        const val SHADOW_LUMA = 24
-        const val HIGHLIGHT_LUMA = 235
         const val LUMA_LEVELS = 256
     }
 }
 
 /** Timestamp-driven warning persistence and threshold hysteresis. */
-class LightingPolicy(private val config: LightingConfig = LightingConfig()) {
+class LightingPolicy(private val config: LightingConfig = CaptureSpec.lighting) {
     fun update(state: LightingState, nowMs: Long, metrics: FaceLightingMetrics?): LightingState {
         val last = state.lastSampleMs
         if (last != null && nowMs <= last) return state
@@ -219,7 +260,7 @@ class LightingPolicy(private val config: LightingConfig = LightingConfig()) {
         val sameCandidate = instant == state.candidateAssessment &&
             (instant != LightingAssessment.UNEVEN || side == state.candidateShadowSide)
         val candidateSince = if (sameCandidate) state.candidateSinceMs ?: nowMs else nowMs
-        val requiredMs = if (instant == LightingAssessment.EVEN) config.acceptEvenMs else config.enterWarningMs
+        val requiredMs = if (instant == LightingAssessment.ACCEPTABLE) config.acceptOkayMs else config.enterWarningMs
         if (nowMs - candidateSince < requiredMs) {
             return state.copy(
                 candidateAssessment = instant,
@@ -232,7 +273,7 @@ class LightingPolicy(private val config: LightingConfig = LightingConfig()) {
         return LightingState(
             assessment = instant,
             shadowSide = side,
-            evenSinceMs = if (instant == LightingAssessment.EVEN) candidateSince else null,
+            acceptableSinceMs = if (instant == LightingAssessment.ACCEPTABLE) candidateSince else null,
             lastSampleMs = nowMs
         )
     }
@@ -241,30 +282,27 @@ class LightingPolicy(private val config: LightingConfig = LightingConfig()) {
         metrics: FaceLightingMetrics,
         active: LightingAssessment
     ): Pair<LightingAssessment, ShadowSide?> {
-        val dark = if (active == LightingAssessment.TOO_DARK) {
+        val dark = if (active == LightingAssessment.TOO_DARK || active == LightingAssessment.HIGH_CONTRAST) {
             metrics.medianLuma < config.darkMedianExit || metrics.shadowFraction >= config.shadowFractionExit
         } else {
             metrics.medianLuma < config.darkMedianEnter || metrics.shadowFraction >= config.shadowFractionEnter
         }
-        if (dark) return LightingAssessment.TOO_DARK to null
 
-        val bright = if (active == LightingAssessment.TOO_BRIGHT) {
+        val bright = if (active == LightingAssessment.TOO_BRIGHT || active == LightingAssessment.HIGH_CONTRAST) {
             metrics.medianLuma > config.brightMedianExit || metrics.highlightFraction >= config.highlightFractionExit
         } else {
             metrics.medianLuma > config.brightMedianEnter || metrics.highlightFraction >= config.highlightFractionEnter
         }
+        // Mixed exposure needs softer light, not an unconditional request for more light.
+        if (dark && bright) return LightingAssessment.HIGH_CONTRAST to null
+        if (dark) return LightingAssessment.TOO_DARK to null
         if (bright) return LightingAssessment.TOO_BRIGHT to null
 
-        val darker = min(metrics.leftTrimmedMeanLuma, metrics.rightTrimmedMeanLuma)
-        val brighter = max(metrics.leftTrimmedMeanLuma, metrics.rightTrimmedMeanLuma)
-        val difference = abs(metrics.leftTrimmedMeanLuma - metrics.rightTrimmedMeanLuma)
-        val ratio = if (brighter <= 0f) 1f else darker / brighter
-        val uneven = if (active == LightingAssessment.UNEVEN) {
-            difference > config.unevenDifferenceExit && ratio < config.unevenRatioExit
-        } else {
-            difference >= config.unevenDifferenceEnter && ratio <= config.unevenRatioEnter
-        }
-        if (uneven) {
+        val horizontal = isUneven(metrics.leftTrimmedMeanLuma, metrics.rightTrimmedMeanLuma, active)
+        val vertical = isUneven(metrics.topTrimmedMeanLuma, metrics.bottomTrimmedMeanLuma, active)
+        // A vertical or multi-axis imbalance has no unambiguous left/right correction.
+        if (vertical) return LightingAssessment.UNEVEN to null
+        if (horizontal) {
             // Metrics are already in the mirrored preview coordinate system shown to the user.
             val shadowSide = if (metrics.leftTrimmedMeanLuma < metrics.rightTrimmedMeanLuma) {
                 ShadowSide.USER_LEFT
@@ -273,22 +311,40 @@ class LightingPolicy(private val config: LightingConfig = LightingConfig()) {
             }
             return LightingAssessment.UNEVEN to shadowSide
         }
-        return LightingAssessment.EVEN to null
+        return LightingAssessment.ACCEPTABLE to null
+    }
+
+    private fun isUneven(first: Float, second: Float, active: LightingAssessment): Boolean {
+        val brighter = max(first, second)
+        val difference = abs(first - second)
+        val ratio = if (brighter <= 0f) 1f else min(first, second) / brighter
+        return if (active == LightingAssessment.UNEVEN) {
+            difference > config.unevenDifferenceExit && ratio < config.unevenRatioExit
+        } else {
+            difference >= config.unevenDifferenceEnter && ratio <= config.unevenRatioEnter
+        }
     }
 
     private fun FaceLightingMetrics.isUsable(): Boolean =
         sampleCount >= config.minimumSamples &&
             leftSampleCount >= config.minimumSideSamples &&
             rightSampleCount >= config.minimumSideSamples &&
-            medianLuma.isFinite() && trimmedMeanLuma.isFinite() &&
-            leftTrimmedMeanLuma.isFinite() && rightTrimmedMeanLuma.isFinite() &&
-            shadowFraction.isFinite() && highlightFraction.isFinite()
+            topSampleCount >= config.minimumSideSamples &&
+            bottomSampleCount >= config.minimumSideSamples &&
+            leftSampleCount.toLong() + rightSampleCount == sampleCount.toLong() &&
+            topSampleCount.toLong() + bottomSampleCount == sampleCount.toLong() &&
+            medianLuma in 0f..255f && trimmedMeanLuma in 0f..255f &&
+            leftTrimmedMeanLuma in 0f..255f && rightTrimmedMeanLuma in 0f..255f &&
+            topTrimmedMeanLuma in 0f..255f && bottomTrimmedMeanLuma in 0f..255f &&
+            shadowFraction in 0f..1f && highlightFraction in 0f..1f &&
+            shadowFraction + highlightFraction <= 1f
+
 }
 
 enum class CaptureGuidance {
     PLACE_FACE, CENTER_FACE, MOVE_LEFT, MOVE_RIGHT, MOVE_UP, MOVE_DOWN,
     CLOSER, FARTHER, LOOK_STRAIGHT, HOLD_STILL, FOLLOWING, TRACKING_LOST,
-    LIGHT_USER_LEFT, LIGHT_USER_RIGHT, MORE_LIGHT, REDUCE_LIGHT
+    LIGHT_USER_LEFT, LIGHT_USER_RIGHT, MORE_LIGHT, REDUCE_LIGHT, SOFTEN_LIGHT
 }
 
 /** Chooses one primary action while preserving independent positioning and lighting state. */
@@ -302,11 +358,12 @@ class GuidancePolicy {
             LightingAssessment.UNEVEN -> when (lighting.shadowSide) {
                 ShadowSide.USER_LEFT -> CaptureGuidance.LIGHT_USER_LEFT
                 ShadowSide.USER_RIGHT -> CaptureGuidance.LIGHT_USER_RIGHT
-                null -> positionGuidance
+                null -> CaptureGuidance.SOFTEN_LIGHT
             }
+            LightingAssessment.HIGH_CONTRAST -> CaptureGuidance.SOFTEN_LIGHT
             LightingAssessment.TOO_DARK -> CaptureGuidance.MORE_LIGHT
             LightingAssessment.TOO_BRIGHT -> CaptureGuidance.REDUCE_LIGHT
-            LightingAssessment.UNKNOWN, LightingAssessment.EVEN -> positionGuidance
+            LightingAssessment.UNKNOWN, LightingAssessment.ACCEPTABLE -> positionGuidance
         }
     }
 }

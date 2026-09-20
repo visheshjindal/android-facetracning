@@ -93,13 +93,14 @@ private fun LightingIndicator(state: LightingIndicatorUiState, modifier: Modifie
     val label = stringResource(state.messageResource())
     val containerColor = when (state.assessment) {
         LightingAssessment.UNKNOWN -> Color.Black.copy(alpha = 0.68f)
-        LightingAssessment.EVEN -> Color(0xFF128A52)
+        LightingAssessment.ACCEPTABLE -> Color(0xFF128A52)
         LightingAssessment.UNEVEN,
         LightingAssessment.TOO_DARK,
+        LightingAssessment.HIGH_CONTRAST,
         LightingAssessment.TOO_BRIGHT -> Color(0xFFFFB020)
     }
     val contentColor = if (state.assessment == LightingAssessment.UNKNOWN ||
-        state.assessment == LightingAssessment.EVEN) Color.White else Color.Black
+        state.assessment == LightingAssessment.ACCEPTABLE) Color.White else Color.Black
 
     Surface(
         modifier = modifier.semantics(mergeDescendants = true) { contentDescription = label },
@@ -151,7 +152,7 @@ private fun LightingStatusIcon(assessment: LightingAssessment, size: Dp) {
             )
         }
         when (assessment) {
-            LightingAssessment.EVEN -> {
+            LightingAssessment.ACCEPTABLE -> {
                 val check = Path().apply {
                     moveTo(center.x - radius * .55f, center.y)
                     lineTo(center.x - radius * .10f, center.y + radius * .42f)
@@ -161,6 +162,7 @@ private fun LightingStatusIcon(assessment: LightingAssessment, size: Dp) {
             }
             LightingAssessment.UNEVEN,
             LightingAssessment.TOO_DARK,
+            LightingAssessment.HIGH_CONTRAST,
             LightingAssessment.TOO_BRIGHT -> {
                 drawLine(color, Offset(center.x, center.y - radius * .5f),
                     Offset(center.x, center.y + radius * .15f), strokeWidth = stroke * .75f)
@@ -198,17 +200,19 @@ private fun CaptureGuidance.messageResource(): Int = when (this) {
     CaptureGuidance.LIGHT_USER_LEFT -> R.string.lighting_add_left
     CaptureGuidance.LIGHT_USER_RIGHT -> R.string.lighting_add_right
     CaptureGuidance.MORE_LIGHT -> R.string.lighting_more
+    CaptureGuidance.SOFTEN_LIGHT -> R.string.lighting_soften
     CaptureGuidance.REDUCE_LIGHT -> R.string.lighting_reduce
 }
 
 private fun LightingIndicatorUiState.messageResource(): Int = when (assessment) {
     LightingAssessment.UNKNOWN -> R.string.lighting_checking
-    LightingAssessment.EVEN -> R.string.lighting_even
-    LightingAssessment.UNEVEN -> if (shadowSide == ShadowSide.USER_LEFT) {
-        R.string.lighting_add_left
-    } else {
-        R.string.lighting_add_right
+    LightingAssessment.ACCEPTABLE -> R.string.lighting_okay
+    LightingAssessment.UNEVEN -> when (shadowSide) {
+        ShadowSide.USER_LEFT -> R.string.lighting_add_left
+        ShadowSide.USER_RIGHT -> R.string.lighting_add_right
+        null -> R.string.lighting_soften
     }
+    LightingAssessment.HIGH_CONTRAST -> R.string.lighting_soften
     LightingAssessment.TOO_DARK -> R.string.lighting_more
     LightingAssessment.TOO_BRIGHT -> R.string.lighting_reduce
 }

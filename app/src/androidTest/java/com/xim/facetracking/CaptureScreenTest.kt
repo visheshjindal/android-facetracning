@@ -1,5 +1,8 @@
 package com.xim.facetracking
 
+import android.os.Build
+import android.view.WindowManager
+import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.mutableStateOf
@@ -8,7 +11,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertCountEquals
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -22,11 +25,30 @@ import com.xim.facetracking.presentation.CaptureScreen
 import com.xim.facetracking.presentation.CaptureUiState
 import com.xim.facetracking.presentation.LightingIndicatorUiState
 import org.junit.Assert.assertEquals
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 
 class CaptureScreenTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+
+    @Before fun keepTestActivityVisible() {
+        // A sleeping/locked device stops the host and removes its Compose semantics roots.
+        // Scope these flags to the test activity; do not change device settings or the app.
+        compose.activityRule.scenario.onActivity { activity ->
+            activity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                activity.setShowWhenLocked(true)
+                activity.setTurnScreenOn(true)
+            } else {
+                @Suppress("DEPRECATION")
+                activity.window.addFlags(
+                    WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                        WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+                )
+            }
+        }
+    }
 
     @Test fun permissionButtonEmitsRequestWithoutCameraDependency() {
         var requests = 0
@@ -121,12 +143,36 @@ class CaptureScreenTest {
                 hint = CaptureGuidance.FOLLOWING,
                 lightingIndicator = LightingIndicatorUiState(
                     visible = true,
-                    assessment = LightingAssessment.EVEN,
+                    assessment = LightingAssessment.ACCEPTABLE,
                     expanded = false
                 )
             )
         }
-        compose.onNodeWithContentDescription("Lighting is even").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Lighting looks okay").assertIsDisplayed()
+    }
+
+    @Test fun verticalAndMixedLightingShareAnAccessibleSoftLightIndicator() {
+        val state = mutableStateOf(CaptureUiState(
+            permissionGranted = true,
+            hint = CaptureGuidance.SOFTEN_LIGHT,
+            lightingIndicator = LightingIndicatorUiState(
+                visible = true, assessment = LightingAssessment.UNEVEN, expanded = true
+            )
+        ))
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f, 2f)) {
+                MaterialTheme { CaptureScreen(state.value, {}, {}, {}, {}, { Box(it) }) }
+            }
+        }
+        compose.onNodeWithContentDescription("Face a soft, even light source").assertIsDisplayed()
+        compose.onAllNodesWithText("Face a soft, even light source").assertCountEquals(2)
+        compose.runOnIdle {
+            state.value = state.value.copy(lightingIndicator = state.value.lightingIndicator.copy(
+                assessment = LightingAssessment.HIGH_CONTRAST
+            ))
+        }
+        compose.onNodeWithContentDescription("Face a soft, even light source").assertIsDisplayed()
+        compose.onAllNodesWithText("Face a soft, even light source").assertCountEquals(2)
     }
 
     @Test fun directionalLightingGuidanceFitsAtLargeFontScale() {

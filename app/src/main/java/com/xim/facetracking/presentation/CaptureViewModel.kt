@@ -75,7 +75,7 @@ class CaptureViewModel(
                 assessment = lighting.assessment,
                 shadowSide = lighting.shadowSide,
                 expanded = positionReady && lighting.assessment != LightingAssessment.UNKNOWN &&
-                    (!compactGood || lighting.assessment != LightingAssessment.EVEN)
+                    (!compactGood || lighting.assessment != LightingAssessment.ACCEPTABLE)
             ),
             trackedFace = domainState.face.takeIf { domainState.positioning.following },
             failure = domainState.failure
