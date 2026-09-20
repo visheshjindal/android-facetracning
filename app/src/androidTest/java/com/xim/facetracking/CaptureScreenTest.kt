@@ -8,6 +8,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.xim.facetracking.domain.PositioningHint
+import com.xim.facetracking.domain.PositioningFace
 import com.xim.facetracking.presentation.CaptureIntent
 import com.xim.facetracking.presentation.CaptureScreen
 import com.xim.facetracking.presentation.CaptureUiState
@@ -50,5 +51,22 @@ class CaptureScreenTest {
         compose.onNodeWithText("Place your face inside the oval").assertIsDisplayed()
         compose.runOnIdle { state.value = state.value.copy(showPositioningMask = false, hint = PositioningHint.FOLLOWING) }
         compose.onNodeWithText("Face positioned — following your face").assertIsDisplayed()
+    }
+
+    @Test fun rendersCorrectiveGuidanceWhileTrackingMaskRemainsHidden() {
+        val trackedFace = PositioningFace(.3f, .5f, .3f, .4f, 0f, 0f, 0f)
+        val state = CaptureUiState(
+            permissionGranted = true,
+            showPositioningMask = false,
+            hint = PositioningHint.MOVE_RIGHT,
+            trackedFace = trackedFace
+        )
+
+        compose.setContent {
+            MaterialTheme { CaptureScreen(state, {}, {}, {}, {}, { Box(it) }) }
+        }
+
+        compose.onNodeWithText("Move right").assertIsDisplayed()
+        compose.onNodeWithText("Restart tracking").assertDoesNotExist()
     }
 }

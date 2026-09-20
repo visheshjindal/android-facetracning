@@ -23,7 +23,8 @@ data class PositioningFace(
 data class PositioningTarget(val width: Float, val height: Float)
 
 enum class PositioningHint {
-    PLACE_FACE, CENTER_FACE, CLOSER, FARTHER, LOOK_STRAIGHT, HOLD_STILL, FOLLOWING, TRACKING_LOST
+    PLACE_FACE, CENTER_FACE, MOVE_LEFT, MOVE_RIGHT, MOVE_UP, MOVE_DOWN,
+    CLOSER, FARTHER, LOOK_STRAIGHT, HOLD_STILL, FOLLOWING, TRACKING_LOST
 }
 
 data class PositioningState(
@@ -84,14 +85,6 @@ class PositioningPolicy(private val config: PositioningConfig = PositioningConfi
         if (last != null && now <= last) return state
 
         val usable = face?.takeIf { it.hasFiniteValues() }
-
-        if (state.following) {
-            return state.copy(
-                lastSample = now,
-                hint = if (usable != null) PositioningHint.FOLLOWING else PositioningHint.TRACKING_LOST
-            )
-        }
-
         val gap = last?.let { now - it }
         val continuous = gap != null && gap <= config.maxGapMs
 
@@ -100,17 +93,30 @@ class PositioningPolicy(private val config: PositioningConfig = PositioningConfi
 
         val poseOk = f != null && withinPose(f, if (state.poseOk) config.poseExit else config.poseEnter)
 
-        val hint = when {
-            f == null || target.width <= 0f || target.height <= 0f -> PositioningHint.PLACE_FACE
-            abs(f.x - 0.5f) > target.width * config.centerTolerance ||
-                    abs(f.y - 0.5f) > target.height * config.centerTolerance -> PositioningHint.CENTER_FACE
-            f.width > target.width * config.maxScale ||
-                    f.height > target.height * config.maxScale -> PositioningHint.FARTHER
-            f.width < target.width * config.minScale ||
-                    f.height < target.height * config.minScale -> PositioningHint.CLOSER
-            !poseOk -> PositioningHint.LOOK_STRAIGHT
-            else -> PositioningHint.HOLD_STILL
+        if (state.following) {
+            return state.copy(
+                hint = guidanceHint(
+                    face = f,
+                    target = target,
+                    poseOk = poseOk,
+                    missingFace = PositioningHint.TRACKING_LOST,
+                    ready = PositioningHint.FOLLOWING,
+                    directionalCentering = true
+                ),
+                lastSample = now,
+                smoothed = f,
+                poseOk = poseOk
+            )
         }
+
+        val hint = guidanceHint(
+            face = f,
+            target = target,
+            poseOk = poseOk,
+            missingFace = PositioningHint.PLACE_FACE,
+            ready = PositioningHint.HOLD_STILL,
+            directionalCentering = false
+        )
 
         val anchor = state.anchor
         val moved = f != null && anchor != null && hasMoved(f, anchor)
@@ -136,6 +142,29 @@ class PositioningPolicy(private val config: PositioningConfig = PositioningConfi
             smoothed = f,
             poseOk = poseOk
         )
+    }
+
+    private fun guidanceHint(
+        face: PositioningFace?,
+        target: PositioningTarget,
+        poseOk: Boolean,
+        missingFace: PositioningHint,
+        ready: PositioningHint,
+        directionalCentering: Boolean
+    ): PositioningHint = when {
+        face == null || target.width <= 0f || target.height <= 0f -> missingFace
+        directionalCentering && face.x < 0.5f - target.width * config.centerTolerance -> PositioningHint.MOVE_RIGHT
+        directionalCentering && face.x > 0.5f + target.width * config.centerTolerance -> PositioningHint.MOVE_LEFT
+        directionalCentering && face.y < 0.5f - target.height * config.centerTolerance -> PositioningHint.MOVE_DOWN
+        directionalCentering && face.y > 0.5f + target.height * config.centerTolerance -> PositioningHint.MOVE_UP
+        !directionalCentering && (abs(face.x - 0.5f) > target.width * config.centerTolerance ||
+                abs(face.y - 0.5f) > target.height * config.centerTolerance) -> PositioningHint.CENTER_FACE
+        face.width > target.width * config.maxScale ||
+                face.height > target.height * config.maxScale -> PositioningHint.FARTHER
+        face.width < target.width * config.minScale ||
+                face.height < target.height * config.minScale -> PositioningHint.CLOSER
+        !poseOk -> PositioningHint.LOOK_STRAIGHT
+        else -> ready
     }
 
     private fun withinPose(f: PositioningFace, limits: PoseLimits): Boolean =

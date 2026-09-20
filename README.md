@@ -2,7 +2,7 @@
 
 Native Android application using Kotlin, Jetpack Compose, CameraX, and on-device ML Kit Face Detection.
 
-The app provides a guided face-positioning experience using a centered white oval mask. After two seconds of continuous, stable alignment, the mask fades out and a live tracking outline follows the user's face across the preview.
+The app provides a guided face-positioning experience using a centered white oval mask. After one second of continuous, stable alignment, the mask fades out and a live tracking outline follows the user's face across the preview while corrective guidance remains active.
 
 ---
 
@@ -34,14 +34,15 @@ Once camera access is granted, the live camera feed opens with a centered white 
 | **Look straight at the camera** | Your head angle exceeds pose limits (yaw > 10°, pitch > 15°, or roll > 8°). Look directly into the front camera lens. |
 | **Hold still for a moment** | Your face is centered, properly scaled, and looking straight ahead. Hold your position steadily. |
 
-#### 3. Two-Second Stable Hold
-- When **"Hold still for a moment"** appears, the app evaluates stability over a continuous **2-second** interval (`holdMs = 2000L`).
-- If you move significantly, drift, tilt your head, or if tracking is interrupted during these 2 seconds, the stability timer resets.
-- Once 2 seconds of continuous alignment elapse, the white oval mask smoothly animates and fades out (450ms transition).
+#### 3. One-Second Stable Hold
+- When **"Hold still for a moment"** appears, the app evaluates stability over a continuous **1-second** interval (`holdMs = 1000L`).
+- If you move significantly, drift, tilt your head, or if tracking is interrupted during this second, the stability timer resets.
+- Once one second of continuous alignment elapses, the white oval mask smoothly animates and fades out (450ms transition).
 
 #### 4. Live Face Following
 - The guidance banner updates to: **"Face positioned — following your face"**.
 - A vibrant green outline (`#00FF87`) tracks and follows the primary detected face in real time as you move within the camera viewport.
+- The white positioning mask remains hidden, but the banner provides explicit **Move left**, **Move right**, **Move up**, or **Move down** guidance when the face leaves the centered target area. It also retains distance and pose guidance. Corrective guidance does not interrupt tracking or require another stable hold.
 - **Multiple Faces**: The detector tracks the primary detection (the first face returned by ML Kit). Additional faces in the background receive no outline and do not obstruct tracking.
 - **Identity Agnostic**: There is no biometric identity lock; if the primary face changes, the outline follows the current primary detection.
 
@@ -50,7 +51,7 @@ Once camera access is granted, the live camera feed opens with a centered white 
   - The green outline disappears.
   - The banner displays: **"Tracking lost — look back at the camera, or restart tracking"**.
   - **Automatic Recovery**: Simply return your face into the camera view. Tracking automatically resumes without forcing you through the initial oval alignment again.
-  - **Manual Restart**: Tap the **Restart tracking** button to reset the session back to the centered white oval mask and the 2-second alignment phase.
+  - **Manual Restart**: Tap the **Restart tracking** button to reset the session back to the centered white oval mask and the 1-second alignment phase.
 
 #### 6. Error Handling & Camera Recovery
 - If the front camera becomes unavailable or face detection fails:

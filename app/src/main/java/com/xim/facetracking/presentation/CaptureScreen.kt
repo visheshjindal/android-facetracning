@@ -79,6 +79,10 @@ private fun TrackingOverlay(state: CaptureUiState, modifier: Modifier) {
 private fun PositioningHint.messageResource(): Int = when (this) {
     PositioningHint.PLACE_FACE -> R.string.position_place
     PositioningHint.CENTER_FACE -> R.string.position_center
+    PositioningHint.MOVE_LEFT -> R.string.position_move_left
+    PositioningHint.MOVE_RIGHT -> R.string.position_move_right
+    PositioningHint.MOVE_UP -> R.string.position_move_up
+    PositioningHint.MOVE_DOWN -> R.string.position_move_down
     PositioningHint.CLOSER -> R.string.position_closer
     PositioningHint.FARTHER -> R.string.position_farther
     PositioningHint.LOOK_STRAIGHT -> R.string.position_straight

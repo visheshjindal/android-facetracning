@@ -10,6 +10,10 @@
     <string name="detector_unavailable">Face detection is unavailable. Please try again.</string>
     <string name="position_place">Place your face inside the oval</string>
     <string name="position_center">Center your face inside the oval</string>
+    <string name="position_move_left">Move left</string>
+    <string name="position_move_right">Move right</string>
+    <string name="position_move_up">Move up</string>
+    <string name="position_move_down">Move down</string>
     <string name="position_closer">Move a little closer</string>
     <string name="position_farther">Move a little farther away</string>
     <string name="position_straight">Look straight at the camera</string>
